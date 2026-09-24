@@ -40,6 +40,8 @@ func New(cfg config.Config) *mcp.Server {
 		Name:        "server_info",
 		Description: "Return safe server metadata and configuration diagnostics.",
 	}, ServerInfo)
-	RegisterBoardTools(server, monday.NewClient(cfg))
+	client := monday.NewClient(cfg)
+	RegisterBoardTools(server, client)
+	RegisterBoardResourceTools(server, client)
 	return server
 }
