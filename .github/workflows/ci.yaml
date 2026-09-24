@@ -16,23 +16,22 @@ jobs:
   go:
     name: Go checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
+      - name: Build validation image
+        run: docker build --target builder -t mcp-monday-projects:checks .
       - name: Verify formatting
-        run: test -z "$(gofmt -l .)"
+        run: docker run --rm mcp-monday-projects:checks sh -c 'test -z "$(gofmt -l .)"'
+      - name: Verify module integrity
+        run: docker run --rm mcp-monday-projects:checks go mod verify
       - name: Test
-        run: go test ./...
+        run: docker run --rm mcp-monday-projects:checks go test ./...
       - name: Vet
-        run: go vet ./...
+        run: docker run --rm mcp-monday-projects:checks go vet ./...
 
   docker:
     name: Docker build
