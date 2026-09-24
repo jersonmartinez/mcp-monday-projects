@@ -20,6 +20,7 @@ type Config struct {
 	LogLevel         string
 	HTTPTimeout      time.Duration
 	MaxResponseBytes int64
+	MaxRetries       int
 }
 
 // Load reads and validates configuration from environment variables.
@@ -43,6 +44,10 @@ func Load() (Config, error) {
 	if err != nil || maxResponseBytes < 1024 {
 		return Config{}, fmt.Errorf("MCP_MAX_RESPONSE_BYTES must be at least 1024 bytes")
 	}
+	retries, err := parseInt64("MCP_MAX_RETRIES", 2)
+	if err != nil || retries < 0 || retries > 5 {
+		return Config{}, fmt.Errorf("MCP_MAX_RETRIES must be between 0 and 5")
+	}
 
 	return Config{
 		APIToken:         token,
@@ -51,6 +56,7 @@ func Load() (Config, error) {
 		LogLevel:         valueOrDefault("MCP_LOG_LEVEL", "info"),
 		HTTPTimeout:      timeout,
 		MaxResponseBytes: maxResponseBytes,
+		MaxRetries:       int(retries),
 	}, nil
 }
 
