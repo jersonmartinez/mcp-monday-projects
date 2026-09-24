@@ -69,3 +69,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and [SEC
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Initial tool catalog
+
+| Tool | Purpose |
+|---|---|
+| `server_info` | Return safe runtime metadata. |
+| `list_workspaces` | Discover visible monday.com workspaces. |
+| `list_boards` | Discover visible monday.com boards. |
+| `get_board` | Retrieve one board by ID. |
+
+Tools return typed JSON objects and propagate sanitized, actionable errors. More
+board, group, column, item, update, and reporting tools are being added through
+issues linked to the project epic.
