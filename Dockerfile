@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+
+FROM golang:1.25.0-alpine AS builder
+
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN go mod tidy && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/mcp-monday-projects ./cmd/mcp-server
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
+LABEL org.opencontainers.image.title="Monday.com MCP Server" \
+      org.opencontainers.image.description="Go MCP server for monday.com" \
+      org.opencontainers.image.source="https://github.com/jersonmartinez/mcp-monday-projects"
+
+COPY --from=builder /out/mcp-monday-projects /mcp-monday-projects
+USER nonroot:nonroot
+ENTRYPOINT ["/mcp-monday-projects"]

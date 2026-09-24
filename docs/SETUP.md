@@ -1,0 +1,46 @@
+# Setup
+
+## Requirements
+
+Only Docker and Docker Compose are required on the host. Go commands run inside
+Docker through the Makefile.
+
+## Configuration
+
+Copy the committed template:
+
+```bash
+cp .env.example .env
+```
+
+Set `MONDAY_API_TOKEN` to an API token created in monday.com's developer
+settings. Keep the token only in `.env` or a secret manager; `.env` is ignored
+by Git.
+
+`MONDAY_API_VERSION` is sent as Monday's `API-Version` HTTP header. The default
+`2026-07` is the current stable version documented by Monday at the time this
+repository was initialized. Check the [Monday API versioning
+documentation](https://developer.monday.com/api-reference/docs/api-versioning)
+before upgrading it. Do not use a release candidate in production.
+
+## Run
+
+```bash
+make build
+make run
+```
+
+The MCP server uses stdio. Its stdout is reserved for MCP JSON-RPC traffic and
+logs are written to stderr.
+
+## Validation
+
+```bash
+make test
+make fmt-check
+make vet
+make validate
+```
+
+All commands execute in Docker or Docker Compose; no Go installation is
+required on the host.
