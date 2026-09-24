@@ -44,3 +44,13 @@ make validate
 
 All commands execute in Docker or Docker Compose; no Go installation is
 required on the host.
+
+GitHub Actions mirrors this Docker-first validation: the Go checks build the
+builder image and run formatting, module-integrity verification, tests, and
+`go vet` inside it. The security workflow runs a repository secret scan on
+pull requests, pushes to `main`, and the weekly schedule.
+
+The GraphQL transport retries only transient network failures, HTTP 429, and
+HTTP 5xx responses. Retries are bounded by `MCP_MAX_RETRIES` and honor a
+bounded `Retry-After` header. GraphQL validation errors and other permanent
+HTTP errors are returned without retrying.
