@@ -10,7 +10,10 @@ Thanks for contributing to `mcp-monday-projects`.
 4. Implement the smallest coherent change.
 5. Add tests and documentation in the same PR.
 6. Run `make validate`.
-7. Open a PR ready for review and include `Closes #N`.
+7. Wait for every required GitHub Actions check to complete successfully; pending, failed, or missing checks block delivery.
+8. Open a PR ready for review and include `Closes #N`.
+
+CI and security workflows run on pull requests targeting `main` or an intermediate feature branch, so stacked PRs receive the same required validation.
 
 ## Development rules
 

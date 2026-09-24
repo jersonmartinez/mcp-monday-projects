@@ -50,4 +50,6 @@ contract tests, and documentation in the same PR.
 - Every feature starts with an issue in the repository Project.
 - If work spans more than one issue, create an epic and link child issues.
 - PRs are ready for review, use Conventional Commits, and link `Closes #N`.
+- Before presenting a PR as ready, verify that every required GitHub Actions check has completed successfully; pending, failed, or missing checks block delivery.
+- If GitHub Actions fails, fix the failure and re-run the checks before presenting the PR again.
 - Never merge a PR unless the user explicitly requests it.
