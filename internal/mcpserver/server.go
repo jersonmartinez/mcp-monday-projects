@@ -4,6 +4,8 @@ import (
 	"context"
 	"runtime"
 
+	"github.com/jersonmartinez/mcp-monday-projects/internal/config"
+	"github.com/jersonmartinez/mcp-monday-projects/internal/monday"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -29,7 +31,7 @@ func ServerInfo(_ context.Context, _ *mcp.CallToolRequest, _ ServerInfoInput) (*
 }
 
 // New creates the MCP server and registers all currently available tools.
-func New() *mcp.Server {
+func New(cfg config.Config) *mcp.Server {
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "mcp-monday-projects", Version: "0.1.0"},
 		nil,
@@ -38,5 +40,8 @@ func New() *mcp.Server {
 		Name:        "server_info",
 		Description: "Return safe server metadata and configuration diagnostics.",
 	}, ServerInfo)
+	client := monday.NewClient(cfg)
+	RegisterBoardTools(server, client)
+	RegisterBoardResourceTools(server, client)
 	return server
 }

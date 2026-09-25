@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,6 +32,10 @@ jobs:
         run: docker run --rm mcp-monday-projects:checks go mod verify
       - name: Test
         run: docker run --rm mcp-monday-projects:checks go test ./...
+      - name: Build race validation image
+        run: docker build --target race-builder -t mcp-monday-projects:race .
+      - name: Race test
+        run: docker run --rm mcp-monday-projects:race sh -c 'CGO_ENABLED=1 go test -race ./...'
       - name: Vet
         run: docker run --rm mcp-monday-projects:checks go vet ./...
 

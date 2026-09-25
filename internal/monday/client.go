@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/config"
@@ -19,6 +20,7 @@ type Client struct {
 	apiToken         string
 	apiVersion       string
 	maxResponseBytes int64
+	maxRetries       int
 }
 
 // GraphQLRequest is the wire request sent to monday.com.
@@ -49,6 +51,7 @@ func NewClient(cfg config.Config) *Client {
 		apiToken:         cfg.APIToken,
 		apiVersion:       cfg.APIVersion,
 		maxResponseBytes: cfg.MaxResponseBytes,
+		maxRetries:       cfg.MaxRetries,
 	}
 }
 
@@ -62,45 +65,95 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 		return fmt.Errorf("marshal graphql request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("create monday request: %w", err)
-	}
-	req.Header.Set("Authorization", c.apiToken)
-	req.Header.Set("API-Version", c.apiVersion)
-	req.Header.Set("Content-Type", "application/json")
-	response, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("monday request failed: %w", err)
-	}
-	defer response.Body.Close()
+	var lastErr error
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL, bytes.NewReader(payload))
+		if err != nil {
+			return fmt.Errorf("create monday request: %w", err)
+		}
+		req.Header.Set("Authorization", c.apiToken)
+		req.Header.Set("API-Version", c.apiVersion)
+		req.Header.Set("Content-Type", "application/json")
 
-	limited := io.LimitReader(response.Body, c.maxResponseBytes+1)
-	body, err := io.ReadAll(limited)
-	if err != nil {
-		return fmt.Errorf("read monday response: %w", err)
-	}
-	if int64(len(body)) > c.maxResponseBytes {
-		return fmt.Errorf("monday response exceeded configured limit")
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("monday API returned HTTP %d", response.StatusCode)
-	}
+		response, err := c.httpClient.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			lastErr = fmt.Errorf("monday request failed: %w", err)
+			if attempt < c.maxRetries {
+				if err := waitForRetry(ctx, attempt, 0); err != nil {
+					return err
+				}
+				continue
+			}
+			return lastErr
+		}
 
-	var envelope GraphQLResponse
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return fmt.Errorf("decode monday response: %w", err)
-	}
-	if len(envelope.Errors) > 0 {
-		return fmt.Errorf("monday graphql request failed: %s", envelope.Errors[0].Message)
-	}
-	if output == nil {
+		limited := io.LimitReader(response.Body, c.maxResponseBytes+1)
+		body, readErr := io.ReadAll(limited)
+		response.Body.Close()
+		if readErr != nil {
+			return fmt.Errorf("read monday response: %w", readErr)
+		}
+		if int64(len(body)) > c.maxResponseBytes {
+			return fmt.Errorf("monday response exceeded configured limit")
+		}
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			apiErr := &APIError{
+				StatusCode: response.StatusCode,
+				Message:    http.StatusText(response.StatusCode),
+				RetryAfter: retryAfter(response.Header.Get("Retry-After")),
+				Temporary:  response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500,
+			}
+			if apiErr.Temporary && attempt < c.maxRetries {
+				if err := waitForRetry(ctx, attempt, apiErr.RetryAfter); err != nil {
+					return err
+				}
+				continue
+			}
+			return apiErr
+		}
+
+		var envelope GraphQLResponse
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			return fmt.Errorf("decode monday response: %w", err)
+		}
+		if len(envelope.Errors) > 0 {
+			return fmt.Errorf("monday graphql request failed: %s", envelope.Errors[0].Message)
+		}
+		if output == nil {
+			return nil
+		}
+		if err := json.Unmarshal(envelope.Data, output); err != nil {
+			return fmt.Errorf("decode monday data: %w", err)
+		}
 		return nil
 	}
-	if err := json.Unmarshal(envelope.Data, output); err != nil {
-		return fmt.Errorf("decode monday data: %w", err)
+	return lastErr
+}
+
+func retryAfter(value string) time.Duration {
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds < 0 {
+		return 0
 	}
-	return nil
+	return min(time.Duration(seconds)*time.Second, 30*time.Second)
+}
+
+func waitForRetry(ctx context.Context, attempt int, retryAfter time.Duration) error {
+	delay := retryAfter
+	if delay == 0 {
+		delay = min(250*time.Millisecond*time.Duration(1<<attempt), 5*time.Second)
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // Timeout returns the transport timeout for diagnostics and tests.

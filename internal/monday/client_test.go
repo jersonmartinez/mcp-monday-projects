@@ -55,3 +55,31 @@ func TestClientDoReturnsGraphQLError(t *testing.T) {
 		t.Fatal("Do() error = nil, want GraphQL error")
 	}
 }
+
+func TestClientRetriesRateLimit(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":{"ok":true}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{
+		APIToken: "test-token", APIVersion: "2026-07", APIURL: server.URL,
+		HTTPTimeout: time.Second, MaxResponseBytes: 1024, MaxRetries: 1,
+	})
+	var data struct {
+		OK bool `json:"ok"`
+	}
+	if err := client.Do(context.Background(), "query { ok }", nil, &data); err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}

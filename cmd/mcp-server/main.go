@@ -19,7 +19,7 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	logger.Info("starting mcp-monday-projects", "api_version", cfg.APIVersion)
-	server := mcpserver.New()
+	server := mcpserver.New(cfg)
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		logger.Error("MCP server stopped", "error", err)
 		os.Exit(1)

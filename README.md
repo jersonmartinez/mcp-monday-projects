@@ -31,6 +31,7 @@ Only Docker and Docker Compose are required on the host. Go, tests, lint, and ru
 | `MONDAY_API_URL` | no | `https://api.monday.com/v2` | Monday GraphQL endpoint |
 | `MCP_HTTP_TIMEOUT` | no | `15s` | Outbound request timeout |
 | `MCP_MAX_RESPONSE_BYTES` | no | `4194304` | Response size limit |
+| `MCP_MAX_RETRIES` | no | `2` | Bounded retries for transient HTTP failures |
 
 See [docs/SETUP.md](docs/SETUP.md) for token handling and API versioning. The current stable version must be confirmed against Monday's [versioning documentation](https://developer.monday.com/api-reference/docs/api-versioning) before upgrades.
 
@@ -49,9 +50,10 @@ make help        Show targets
 make build       Build the runtime image
 make run         Run the stdio MCP server
 make test        Run Go tests in Docker
+make race        Run race-enabled tests in Docker
 make fmt-check   Verify gofmt in Docker
 make vet         Run go vet in Docker
-make validate    Run the full local validation path
+make validate    Run the full local validation path, including race tests
 make down        Stop Compose resources
 ```
 
@@ -68,3 +70,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and [SEC
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Initial tool catalog
+
+| Tool | Purpose |
+|---|---|
+| `server_info` | Return safe runtime metadata. |
+| `list_workspaces` | Discover visible monday.com workspaces. |
+| `list_boards` | Discover visible monday.com boards. |
+| `get_board` | Retrieve one board by ID. |
+
+Tools return typed JSON objects and propagate sanitized, actionable errors. More
+board, group, column, item, update, and reporting tools are being added through
+issues linked to the project epic.
