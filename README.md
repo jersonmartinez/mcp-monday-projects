@@ -31,6 +31,7 @@ Only Docker and Docker Compose are required on the host. Go, tests, lint, and ru
 | `MONDAY_API_URL` | no | `https://api.monday.com/v2` | Monday GraphQL endpoint |
 | `MCP_HTTP_TIMEOUT` | no | `15s` | Outbound request timeout |
 | `MCP_MAX_RESPONSE_BYTES` | no | `4194304` | Response size limit |
+| `MCP_MAX_RETRIES` | no | `2` | Bounded retries for transient HTTP failures |
 
 See [docs/SETUP.md](docs/SETUP.md) for token handling and API versioning. The current stable version must be confirmed against Monday's [versioning documentation](https://developer.monday.com/api-reference/docs/api-versioning) before upgrades.
 
