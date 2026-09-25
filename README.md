@@ -50,9 +50,10 @@ make help        Show targets
 make build       Build the runtime image
 make run         Run the stdio MCP server
 make test        Run Go tests in Docker
+make race        Run race-enabled tests in Docker
 make fmt-check   Verify gofmt in Docker
 make vet         Run go vet in Docker
-make validate    Run the full local validation path
+make validate    Run the full local validation path, including race tests
 make down        Stop Compose resources
 ```
 

@@ -24,9 +24,9 @@ logs: ## Follow Compose logs
 test: ## Run all Go tests inside the builder container
 	$(COMPOSE) --profile test run --rm test
 
-race: ## Run race-enabled tests inside the builder container
-	docker build --target builder -t $(IMAGE)-builder .
-	docker run --rm $(IMAGE)-builder go test -race ./...
+race: ## Run race-enabled tests inside the Docker race builder
+	docker build --target race-builder -t $(IMAGE)-race-builder .
+	docker run --rm $(IMAGE)-race-builder sh -c 'CGO_ENABLED=1 go test -race ./...'
 
 fmt-check: ## Fail if any Go file needs gofmt
 	docker build --target builder -t $(IMAGE)-builder .
@@ -36,9 +36,9 @@ vet: ## Run go vet inside Docker
 	docker build --target builder -t $(IMAGE)-builder .
 	docker run --rm $(IMAGE)-builder go vet ./...
 
-validate: build test fmt-check vet ## Run the complete local validation suite
+validate: build test race fmt-check vet ## Run the complete local validation suite
 	@echo "Validation passed"
 
 clean: ## Remove local images and Compose resources
 	$(COMPOSE) down --remove-orphans
-	docker image rm $(IMAGE) $(IMAGE)-builder 2>/dev/null || true
+	docker image rm $(IMAGE) $(IMAGE)-builder $(IMAGE)-race-builder 2>/dev/null || true
