@@ -1,0 +1,21 @@
+services:
+  mcp:
+    container_name: mcp_monday_projects
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-monday-projects:local
+    env_file:
+      - .env
+    stdin_open: true
+    tty: false
+    restart: "no"
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    working_dir: /src
+    command: ["go", "test", "./..."]
+    profiles: ["test"]

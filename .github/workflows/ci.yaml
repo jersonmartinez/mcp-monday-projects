@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build validation image
+        run: docker build --target builder -t mcp-monday-projects:checks .
+      - name: Verify formatting
+        run: docker run --rm mcp-monday-projects:checks sh -c 'test -z "$(gofmt -l .)"'
+      - name: Verify module integrity
+        run: docker run --rm mcp-monday-projects:checks go mod verify
+      - name: Test
+        run: docker run --rm mcp-monday-projects:checks go test ./...
+      - name: Vet
+        run: docker run --rm mcp-monday-projects:checks go vet ./...
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t mcp-monday-projects:ci .
