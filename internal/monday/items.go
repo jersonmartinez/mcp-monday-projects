@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/domain"
 )
@@ -21,7 +23,13 @@ const itemFields = `id name state url created_at updated_at
   group { id title }
   creator { id name }
   parent_item { id }
-  column_values { id text value type }`
+  column_values(capabilities: [CALCULATED]) {
+    id text value type
+    ... on BatteryValue {
+      battery_value { key count }
+      column { id settings }
+    }
+  }`
 
 const listGroupsQuery = `query ListGroups($boardID: ID!) {
   boards(ids: [$boardID]) { groups { id title color position archived } }
@@ -55,7 +63,10 @@ const itemsByColumnValuesQuery = `query ItemsByColumnValues($boardID: ID!, $limi
 
 const getItemsQuery = `query GetItems($ids: [ID!]!, $limit: Int!) {
   items(ids: $ids, limit: $limit) { ` + itemFields + `
-    subitems { id name state url updated_at column_values { id text value type } }
+    subitems { id name state url updated_at column_values(capabilities: [CALCULATED]) {
+      id text value type
+      ... on BatteryValue { battery_value { key count } column { id settings } }
+    } }
   }
 }`
 
@@ -132,10 +143,17 @@ type wireItem struct {
 }
 
 type wireColumnValue struct {
-	ID    string          `json:"id"`
-	Text  *string         `json:"text"`
-	Value json.RawMessage `json:"value"`
-	Type  string          `json:"type"`
+	ID           string             `json:"id"`
+	Text         *string            `json:"text"`
+	Value        json.RawMessage    `json:"value"`
+	Type         string             `json:"type"`
+	BatteryValue []wireBatteryValue `json:"battery_value"`
+	Column       *domain.Column     `json:"column"`
+}
+
+type wireBatteryValue struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
 }
 
 func (w wireItem) toDomain() domain.Item {
@@ -151,6 +169,9 @@ func (w wireItem) toDomain() domain.Item {
 		if value.Text != nil {
 			cell.Text = *value.Text
 		}
+		if cell.Text == "" {
+			cell.Text = batteryValueText(value)
+		}
 		cell.Value = rawJSONString(value.Value)
 		item.ColumnValues = append(item.ColumnValues, cell)
 	}
@@ -159,6 +180,37 @@ func (w wireItem) toDomain() domain.Item {
 		item.Subitems = append(item.Subitems, domain.Subitem{ID: child.ID, Name: child.Name, State: child.State, URL: child.URL, UpdatedAt: child.UpdatedAt, ColumnValues: child.ColumnValues})
 	}
 	return item
+}
+
+// batteryValueText converts monday's multi-level status representation to the
+// same display text exposed for classic status columns. A parent with several
+// rolled-up labels is rendered with counts so the value is not mistaken for an
+// ordinary single-label status.
+func batteryValueText(value wireColumnValue) string {
+	if len(value.BatteryValue) == 0 || value.Column == nil {
+		return ""
+	}
+	labels := value.Column.Labels()
+	byID := make(map[int]string, len(labels))
+	for _, label := range labels {
+		byID[label.ID] = label.Label
+	}
+	parts := make([]string, 0, len(value.BatteryValue))
+	for _, entry := range value.BatteryValue {
+		id, err := strconv.Atoi(entry.Key)
+		if err != nil {
+			continue
+		}
+		label := byID[id]
+		if label == "" {
+			continue
+		}
+		if len(value.BatteryValue) == 1 {
+			return label
+		}
+		parts = append(parts, fmt.Sprintf("%s (%d)", label, entry.Count))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // rawJSONString returns monday's JSON value as a compact JSON document string.
