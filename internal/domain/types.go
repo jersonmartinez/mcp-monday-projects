@@ -98,6 +98,9 @@ type ColumnValue struct {
 	Text  string `json:"text"`
 	Value string `json:"value,omitempty"`
 	Type  string `json:"type"`
+	// LinkedItemIDs lists the connected items of dependency and board-relation columns, whose value is null in
+	// current monday API versions.
+	LinkedItemIDs []string `json:"linked_item_ids,omitempty"`
 }
 
 // UserRef is a compact reference to a user.

@@ -96,6 +96,37 @@ func TestBatteryValueMapping(t *testing.T) {
 	}
 }
 
+func TestConnectedItemColumnsExposeLinkedIDs(t *testing.T) {
+	client, contract := newContractClient(t, "GetItems", `{"data":{"items":[{"id":"11","name":"Task","column_values":[
+		{"id":"dependency","text":null,"value":null,"type":"dependency","linked_item_ids":["21","22"],"display_value":"Design, Review"},
+		{"id":"relation","text":null,"value":null,"type":"board_relation","linked_item_ids":["31"],"display_value":"Parent"},
+		{"id":"mirror","text":null,"value":null,"type":"mirror","display_value":"Ana"},
+		{"id":"empty_dependency","text":null,"value":null,"type":"dependency","linked_item_ids":[],"display_value":""}
+	] } ]}}`)
+	item, err := client.GetItem(context.Background(), "11")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"... on DependencyValue", "... on BoardRelationValue", "... on MirrorValue"} {
+		if !strings.Contains(contract.query, fragment) {
+			t.Fatalf("query does not request %s: %s", fragment, contract.query)
+		}
+	}
+	dep := item.ColumnValues[0]
+	if got := strings.Join(dep.LinkedItemIDs, ","); got != "21,22" || dep.Text != "Design, Review" {
+		t.Fatalf("dependency = %+v", dep)
+	}
+	if got := strings.Join(item.ColumnValues[1].LinkedItemIDs, ","); got != "31" {
+		t.Fatalf("board relation = %+v", item.ColumnValues[1])
+	}
+	if item.ColumnValues[2].Text != "Ana" || item.ColumnValues[2].LinkedItemIDs != nil {
+		t.Fatalf("mirror = %+v", item.ColumnValues[2])
+	}
+	if item.ColumnValues[3].LinkedItemIDs != nil || item.ColumnValues[3].Text != "" {
+		t.Fatalf("empty dependency = %+v", item.ColumnValues[3])
+	}
+}
+
 func TestBatteryValueTextHandlesIncompleteMetadata(t *testing.T) {
 	cases := []wireColumnValue{
 		{},

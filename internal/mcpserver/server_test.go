@@ -435,7 +435,7 @@ func TestStableToolSchemas(t *testing.T) {
 	}
 	sum := sha256.Sum256(raw)
 	got := hex.EncodeToString(sum[:])
-	const expected = "4e4f19e42b8b1fd8f2ac1da3c5f904aa0067e0ec5ea48057ec212e43160bf901"
+	const expected = "0fe2a77208d88c1367ec89ce84b9249cebb69a10ed493377730fbd4592997521"
 	if got != expected {
 		t.Fatalf("stable tool schema digest changed: got %s; update intentionally with release notes", got)
 	}

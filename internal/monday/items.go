@@ -18,18 +18,26 @@ type (
 	Item        = domain.Item
 )
 
-const itemFields = `id name state url created_at updated_at
-  board { id }
-  group { id title }
-  creator { id name }
-  parent_item { id }
-  column_values(capabilities: [CALCULATED]) {
+// columnValueFields selects every column value plus the typed fragments whose data is not exposed through
+// value/text: calculated multi-level statuses (BatteryValue) and connected items (DependencyValue,
+// BoardRelationValue), whose value is null in current API versions, and mirrors (MirrorValue).
+const columnValueFields = `
     id text value type
     ... on BatteryValue {
       battery_value { key count }
       column { id settings }
     }
-  }`
+    ... on DependencyValue { linked_item_ids display_value }
+    ... on BoardRelationValue { linked_item_ids display_value }
+    ... on MirrorValue { display_value }
+  `
+
+const itemFields = `id name state url created_at updated_at
+  board { id }
+  group { id title }
+  creator { id name }
+  parent_item { id }
+  column_values(capabilities: [CALCULATED]) {` + columnValueFields + `}`
 
 const listGroupsQuery = `query ListGroups($boardID: ID!) {
   boards(ids: [$boardID]) { groups { id title color position archived } }
@@ -63,10 +71,7 @@ const itemsByColumnValuesQuery = `query ItemsByColumnValues($boardID: ID!, $limi
 
 const getItemsQuery = `query GetItems($ids: [ID!]!, $limit: Int!) {
   items(ids: $ids, limit: $limit) { ` + itemFields + `
-    subitems { id name state url updated_at column_values(capabilities: [CALCULATED]) {
-      id text value type
-      ... on BatteryValue { battery_value { key count } column { id settings } }
-    } }
+    subitems { id name state url updated_at column_values(capabilities: [CALCULATED]) {` + columnValueFields + `} }
   }
 }`
 
@@ -143,12 +148,14 @@ type wireItem struct {
 }
 
 type wireColumnValue struct {
-	ID           string             `json:"id"`
-	Text         *string            `json:"text"`
-	Value        json.RawMessage    `json:"value"`
-	Type         string             `json:"type"`
-	BatteryValue []wireBatteryValue `json:"battery_value"`
-	Column       *domain.Column     `json:"column"`
+	ID            string             `json:"id"`
+	Text          *string            `json:"text"`
+	Value         json.RawMessage    `json:"value"`
+	Type          string             `json:"type"`
+	BatteryValue  []wireBatteryValue `json:"battery_value"`
+	Column        *domain.Column     `json:"column"`
+	LinkedItemIDs []string           `json:"linked_item_ids"`
+	DisplayValue  *string            `json:"display_value"`
 }
 
 type wireBatteryValue struct {
@@ -172,7 +179,13 @@ func (w wireItem) toDomain() domain.Item {
 		if cell.Text == "" {
 			cell.Text = batteryValueText(value)
 		}
+		if cell.Text == "" && value.DisplayValue != nil {
+			cell.Text = *value.DisplayValue
+		}
 		cell.Value = rawJSONString(value.Value)
+		if len(value.LinkedItemIDs) > 0 {
+			cell.LinkedItemIDs = append([]string(nil), value.LinkedItemIDs...)
+		}
 		item.ColumnValues = append(item.ColumnValues, cell)
 	}
 	for _, sub := range w.Subitems {
