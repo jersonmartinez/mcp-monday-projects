@@ -226,6 +226,9 @@ func (s *Service) CreateSubitem(ctx context.Context, parentID, name string, valu
 	if err != nil {
 		return nil, err
 	}
+	if parent.ParentItemID != "" {
+		return nil, invalid("parent_item_id %s is already a subitem; monday does not support subitems of subitems", parentID)
+	}
 	if err := s.guard.CheckBoard(parent.BoardID); err != nil {
 		return nil, err
 	}
@@ -400,6 +403,7 @@ type BulkRowOutcome struct {
 	Error      string                   `json:"error,omitempty"`
 	Normalized map[string]any           `json:"normalized,omitempty"`
 	Issues     []domain.ValidationIssue `json:"issues,omitempty"`
+	Warnings   []string                 `json:"warnings,omitempty"`
 }
 
 // BulkUpdateItems validates every row first; nothing is written if any row is
@@ -451,6 +455,7 @@ func (s *Service) BulkUpdateItems(ctx context.Context, boardID string, updates [
 			continue
 		}
 		row.Status = "updated"
+		row.Warnings = s.persistedWarnings(ctx, row.ItemID, row.Normalized)
 		result.Succeeded++
 	}
 	return result, nil

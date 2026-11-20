@@ -23,7 +23,7 @@ and an actionable message; the token and raw API payloads are never echoed.
 
 <!-- tools:begin -->
 
-_91 tools, generated from `list_tool_catalog`._
+_103 tools, generated from `list_tool_catalog`._
 
 ### Diagnostics
 
@@ -83,9 +83,11 @@ _91 tools, generated from `list_tool_catalog`._
 
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
+| `find_item_by_text` | read | `items.read` | Find visible items whose name or selected text, link, or long-text columns contain a string. |
 | `find_items_by_column_values` | read | `items.read` | Find items whose columns exactly match given display values (e.g. status=Done and environment=prod). |
 | `get_item` | read | `items.read` | Get one item with its board, group, creator, column values, and subitems. |
 | `get_item_context` | read | `items.read` | Return a compact item projection with derived status, owner, priority, due date, age, and missing signals. |
+| `get_item_dependencies` | read | `items.read` | Read the dependency column and return both items this item depends on and items that depend on it. |
 | `get_items` | read | `items.read` | Get up to 100 items by ID in one request. |
 | `item_integration_payload` | read | `items.read` | Build a stable idempotent payload for synchronizing a Monday item with GitHub, n8n, or another system. |
 | `list_group_items` | read | `items.read` | Read one cursor page of items in a single group. |
@@ -95,6 +97,7 @@ _91 tools, generated from `list_tool_catalog`._
 | `search_items` | read | `items.read` | Search a board for items whose name contains text, optionally combined with filter rules (status any_of, date within_the_next, etc.). |
 | `search_items_all` | read | `items.read` | Search all visible items with a bounded result set and explicit truncation metadata. |
 | `validate_column_values` | read | `items.read` | Dry-run: validate friendly column values against a board schema and return the exact monday JSON that a write would send, or per-column issues. |
+| `verify_item_columns` | read | `items.read` | Compare expected values with persisted board values and report every difference and unreadable column. |
 
 ### Items — write
 
@@ -109,6 +112,7 @@ _91 tools, generated from `list_tool_catalog`._
 | `move_item_to_board` | write | `items.write` | Move an item to a group on another board (both boards must be writable). |
 | `rename_item` | write | `items.write` | Rename an item. |
 | `set_item_date` | write | `items.write` | Set or clear a date on an item; the date column is auto-detected (prefers due/deadline). |
+| `set_item_dependencies` | write | `items.write` | Add, remove, or replace dependency links after validating that referenced items exist on the same board. |
 | `set_item_status` | write | `items.write` | Set a status label on an item; the status column is auto-detected and the label is validated. |
 | `update_item_column_values` | write | `items.write` | Update several column values of an item in one mutation, after typed validation. |
 
@@ -117,7 +121,10 @@ _91 tools, generated from `list_tool_catalog`._
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
 | `bulk_archive_items` | write · archive | `items.write` | Archive (never delete) up to 50 items. dry_run defaults to true. |
+| `bulk_create_updates` | write | `items.write` | Publish one update per item with per-item results; dry_run defaults to true. |
 | `bulk_move_items` | write | `items.write` | Move up to 50 items to a group. dry_run defaults to true. |
+| `bulk_set_dates` | write | `items.write` | Validate and set date values for up to 50 items with persisted-value warnings. |
+| `bulk_set_people` | write | `items.write` | Validate and set people values for up to 50 items with the normal dry-run safety gate. |
 | `bulk_update_items` | write | `items.write` | Validate and apply column values to up to 50 items. dry_run defaults to true; nothing is written if any row is invalid. |
 
 ### Users and teams
@@ -133,8 +140,8 @@ _91 tools, generated from `list_tool_catalog`._
 
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
-| `add_file_to_column` | write | `collaboration.write` | Attach a file to a file-type column of an item (content passed base64-encoded). |
-| `add_file_to_update` | write | `collaboration.write` | Attach a file to an update/comment (content passed base64-encoded). |
+| `add_file_to_column` | write | `collaboration.write` | Attach a file to a file-type column of an item. Pass the file contents base64-encoded in content_base64. |
+| `add_file_to_update` | write | `collaboration.write` | Attach a file to an update (comment). Pass the file contents base64-encoded in content_base64; the server never reads a client path. |
 | `board_activity_summary` | read | `collaboration.read` | Summarize recent board updates by author and reply volume for standups and audits. |
 | `create_update` | write | `collaboration.write` | Post an update (comment) on an item. |
 | `edit_update` | write | `collaboration.write` | Replace an existing update body in place; the update must belong to the supplied item. |
@@ -157,6 +164,7 @@ _91 tools, generated from `list_tool_catalog`._
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
 | `board_health_report` | read | `reports.read` | Score a board 0-100 (grade A-D) from overdue, blocked, stale, and unassigned work, with explained signals and Markdown. |
+| `board_progress_report` | read | `reports.read` | Roll up planned and spent numeric effort by status and optional phase, including item and effort percentages. |
 | `board_risk_report` | read | `reports.read` | Return a compact, actionable risk view with due-soon, overdue, blocked, and unassigned items plus a 0-100 score. |
 | `board_summary` | read | `reports.read` | Summarize a board: items per group and status, completion %, overdue, blocked, and unassigned open work. |
 | `column_distribution` | read | `reports.read` | Count items by the display value of any column (priority, environment, owner, ...). |
@@ -168,6 +176,8 @@ _91 tools, generated from `list_tool_catalog`._
 | `find_unassigned_items` | read | `reports.read` | Find open items without an owner, making staffing gaps explicit instead of silently treating unreadable owners as empty. |
 | `overdue_items` | read | `reports.read` | List open items whose due date has passed, most late first, with days late. |
 | `stale_items` | read | `reports.read` | List open items with no update for N days (default 14). |
+| `subitems_status_rollup` | read | `reports.read` | Summarize subitem status counts for several parent items in one bounded read. |
+| `timeline_dependency_preview` | read | `reports.read` | Preview the date shift for directly dependent items without writing any timeline. |
 | `workload_report` | read | `reports.read` | Open, done, overdue, and blocked items per assignee of the owner column. |
 | `workspace_overview` | read | `reports.read` | Overview of a workspace: active boards (excluding subitem boards), item totals, and URLs. |
 

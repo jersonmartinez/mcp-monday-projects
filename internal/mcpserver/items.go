@@ -43,6 +43,12 @@ type SubitemsOutput struct {
 	Count    int              `json:"count"`
 }
 
+// ListSubitemsInput selects a parent and optional returned columns.
+type ListSubitemsInput struct {
+	ItemID    string   `json:"item_id" jsonschema:"parent item identifier"`
+	ColumnIDs []string `json:"column_ids,omitempty" jsonschema:"optional columns to return; default all visible columns"`
+}
+
 func pageOutput(page domain.ItemPage) ItemsOutput {
 	return ItemsOutput{Items: page.Items, Count: len(page.Items), Cursor: page.Cursor, HasMore: page.Cursor != ""}
 }
@@ -270,12 +276,12 @@ func registerItemTools(r *registry) {
 		})
 	add(r, ToolSpec{Name: "list_subitems", Category: CatItemsRead, Title: "List subitems", ReadOnly: true,
 		Description: "List the subitems of an item."},
-		func(ctx context.Context, in ItemIDInput) (SubitemsOutput, error) {
-			item, err := svc.GetItem(ctx, in.ItemID)
+		func(ctx context.Context, in ListSubitemsInput) (SubitemsOutput, error) {
+			subitems, err := svc.Subitems(ctx, in.ItemID, in.ColumnIDs)
 			if err != nil {
 				return SubitemsOutput{}, wrap("list subitems", err)
 			}
-			return SubitemsOutput{Subitems: item.Subitems, Count: len(item.Subitems)}, nil
+			return SubitemsOutput{Subitems: subitems, Count: len(subitems)}, nil
 		})
 	add(r, ToolSpec{Name: "validate_column_values", Category: CatItemsRead, Title: "Validate column values", ReadOnly: true, Capability: "items.read",
 		Description: "Dry-run: validate friendly column values against a board schema and return the exact monday JSON that a write would send, or per-column issues."},
@@ -313,7 +319,7 @@ func registerItemTools(r *registry) {
 			if err != nil {
 				return ItemOutput{}, wrap("update item values", err)
 			}
-			return ItemOutput{Item: *item, Warnings: writeWarnings(*item, columnIDsOf(in.ColumnValues)...)}, nil
+			return ItemOutput{Item: *item, Warnings: append(writeWarnings(*item, columnIDsOf(in.ColumnValues)...), persistedValueWarnings(ctx, svc, in.ItemID, in.ColumnValues)...)}, nil
 		})
 	add(r, ToolSpec{Name: "set_item_status", Category: CatItemsWrite, Title: "Set item status",
 		Description: "Set a status label on an item; the status column is auto-detected and the label is validated."},
@@ -335,7 +341,15 @@ func registerItemTools(r *registry) {
 			if err != nil {
 				return ColumnWriteOutput{}, wrap("set item date", err)
 			}
-			return ColumnWriteOutput{Item: *item, ColumnID: column, Warnings: writeWarnings(*item, column)}, nil
+			warnings := writeWarnings(*item, column)
+			if in.Date != "" {
+				requestedDate := in.Date
+				if len(requestedDate) > 10 {
+					requestedDate = requestedDate[:10]
+				}
+				warnings = append(warnings, svc.PersistedValueWarnings(ctx, in.ItemID, column, map[string]any{"date": requestedDate})...)
+			}
+			return ColumnWriteOutput{Item: *item, ColumnID: column, Warnings: warnings}, nil
 		})
 	add(r, ToolSpec{Name: "assign_item_people", Category: CatItemsWrite, Title: "Assign people",
 		Description: "Assign users or teams to an item's people column (auto-detected); an empty list clears it."},
