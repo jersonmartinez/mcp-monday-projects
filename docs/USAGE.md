@@ -220,3 +220,13 @@ la trazabilidad funcione en ambos sentidos.
 
 - `assign_item_people` acepta **varios** `user_ids`: asigne a **todas** las personas responsables de un item en
   una sola llamada (no reparta un item entre asignados distintos si el trabajo es conjunto).
+
+## 13. Reconcile a large program safely
+
+Use `list_subitems` with `column_ids` to fetch only the subitem cells needed by a synchronization pass. `find_item_by_text` searches item names and visible text/link/long-text cells when an external reference is not in the item name.
+
+For idempotent synchronization, call `verify_item_columns` with an `expected` map after writes. The result separates correct rows, differences, and columns that are unreadable to the token. Date and timeline writes also return warnings when the persisted value differs from the requested value, which can happen when dependencies move dates.
+
+`board_progress_report` groups planned and spent numeric effort by status and optional phase, while `subitems_status_rollup` summarizes several parents at once. Use `get_item_dependencies` before changing a dependency graph, `set_item_dependencies` with `mode` `add`, `remove`, or `replace` to make the intended operation explicit, and `timeline_dependency_preview` to inspect direct date shifts before a write.
+
+For bounded batch operations, use `bulk_create_updates`, `bulk_set_people`, and `bulk_set_dates` with their default dry run first. Each write-capable bulk tool returns per-item outcomes; do not treat a successful batch call as proof that every row persisted.

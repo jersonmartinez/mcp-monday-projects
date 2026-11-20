@@ -687,6 +687,10 @@ func intList(value any) ([]int, error) {
 	switch v := value.(type) {
 	case []any:
 		entries = v
+	case []string:
+		for _, entry := range v {
+			entries = append(entries, entry)
+		}
 	default:
 		entries = []any{v}
 	}

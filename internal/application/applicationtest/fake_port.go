@@ -40,7 +40,7 @@ func NewFakePort() *FakePort {
 	f := &FakePort{
 		Columns: map[string][]domain.Column{"100": {
 			{ID: "name", Title: "Name", Type: "name"}, status,
-			{ID: "due", Title: "Due date", Type: "date"}, {ID: "owner", Title: "Owner", Type: "people"}, {ID: "est", Title: "Estimate", Type: "numbers"},
+			{ID: "due", Title: "Due date", Type: "date"}, {ID: "owner", Title: "Owner", Type: "people"}, {ID: "est", Title: "Estimate", Type: "numbers"}, {ID: "dependency", Title: "Depends on", Type: "dependency"},
 		}},
 		Groups:         map[string][]domain.Group{"100": {{ID: "todo", Title: "To Do"}}},
 		Items:          map[string]domain.Item{},
