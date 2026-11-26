@@ -29,6 +29,18 @@
 - name: release
   color: 0e8a16
   description: Versioning, changelog and published artifacts
+- name: release:major
+  color: 9e0142
+  description: Force a major semantic-version release on merge
+- name: release:minor
+  color: 0e8a16
+  description: Force a minor semantic-version release on merge
+- name: release:patch
+  color: 1f883d
+  description: Force a patch semantic-version release on merge
+- name: release:none
+  color: 6e7781
+  description: Do not create a release when this pull request merges
 
 # ── Ecosystem (also applied by Dependabot) ─────────────────────────────────
 - name: dependencies

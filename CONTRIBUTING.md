@@ -26,6 +26,8 @@ CI and security workflows run on pull requests targeting `main` or an intermedia
 | `pr-checks.yaml` | PRs | Conventional Commits PR title, branch name (`scripts/check_branch_name.sh`; Dependabot branches exempt), yamllint, shellcheck, markdownlint and relative doc links (`scripts/check_doc_links.py`) |
 | `labels-sync.yaml` | Push to `main` touching `.github/labels.yaml`; PRs as a dry run | Creates and updates labels from `.github/labels.yaml`. It never deletes a label |
 | `docs-wiki-sync.yaml` | Push to `main` touching `docs/` | Rebuilds the [Wiki](https://github.com/jersonmartinez/mcp-monday-projects/wiki) from `docs/` (`scripts/wiki_pages.py`) |
+| `release-automation.yaml` | Push to `main` | Skips direct pushes; for merged PRs derives semver from release labels/Conventional Commits, updates changelog/version, pushes the release commit and tag, then dispatches `release.yaml` |
+| `release.yaml` | Tag push or dispatch | Verifies the tag/version/changelog, tests the tagged tree, publishes multi-arch GHCR images with SBOM/provenance and creates the GitHub release |
 
 `make lint` runs the same linters as `pr-checks.yaml` in Docker, and
 `make wiki-preview` builds the Wiki pages into `./wiki_out` without pushing.
@@ -38,6 +40,11 @@ CI and security workflows run on pull requests targeting `main` or an intermedia
   skips.
 
 ## Development rules
+
+- Do not manually bump `internal/mcpserver/server.go` version or create release
+  tags in ordinary PRs. Release automation owns versioning after merge; use
+  `release:none` only when the PR must not publish artifacts. See
+  [docs/RELEASING.md](docs/RELEASING.md).
 
 - Go and Docker Compose are the supported development stack.
 - Do not run Go commands directly on the host; use Makefile targets.
