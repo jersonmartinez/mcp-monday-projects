@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-26
+
+### 🚀 Features
+
+- **Add Monday OAuth 2.1 PKCE login** by @Jerson-Martinez-JEM0925 in [#82](https://github.com/jersonmartinez/mcp-monday-projects/pull/82).
+
+### 📦 Release data
+
+- **Version:** `v1.7.0` (`minor` bump from `v1.6.0` — new user-facing capability).
+- **Compatibility:** ✅ backwards-compatible feature release.
+- **Source:** pull request [#82](https://github.com/jersonmartinez/mcp-monday-projects/pull/82); merge commit `eb6079049acc`.
+- **Compare:** [`v1.6.0...v1.7.0`](https://github.com/jersonmartinez/mcp-monday-projects/compare/v1.6.0...v1.7.0).
+- **Container image:** `ghcr.io/jersonmartinez/mcp-monday-projects:1.7.0` (also `ghcr.io/jersonmartinez/mcp-monday-projects:1.7` and `ghcr.io/jersonmartinez/mcp-monday-projects:latest`).
+- **Upgrade:** `docker pull ghcr.io/jersonmartinez/mcp-monday-projects:1.7.0`.
+
 ## [1.6.0] - 2026-11-26
 
 ### 🚀 Features
