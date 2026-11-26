@@ -62,6 +62,15 @@ type Port interface {
 	LikeUpdate(ctx context.Context, updateID string) error
 	AddFileToUpdate(ctx context.Context, updateID, filename string, content []byte) (*monday.FileAsset, error)
 	AddFileToColumn(ctx context.Context, itemID, columnID, filename string, content []byte) (*monday.FileAsset, error)
+	ListItemAssets(ctx context.Context, itemID, source string, columnIDs []string) ([]domain.Asset, error)
+	ListUpdateAssets(ctx context.Context, updateID string) ([]domain.Asset, error)
+
+	ListAutomations(ctx context.Context, boardID string, limit int, cursor string, includeLegacy bool) (domain.AutomationPage, error)
+	CreateAutomation(ctx context.Context, input monday.CreateAutomationInput) (string, error)
+	ManageAutomation(ctx context.Context, action, boardID, automationID string) (bool, error)
+	AutomationTotals(ctx context.Context, boardID string, userIDs []string) (domain.AutomationStatistics, error)
+	AutomationEntityTotals(ctx context.Context, runStatus, boardID string, userIDs, excludedAutomationIDs []string) (domain.AutomationEntityStatistics, error)
+	ListAutomationRuns(ctx context.Context, boardID string, offset int, states []string, automationIDs []string, itemID string) (domain.AutomationRunPage, error)
 	CreateNotification(ctx context.Context, userID, targetID, targetType, text string) error
 	ListTags(ctx context.Context, ids []string) ([]domain.Tag, error)
 	CreateOrGetTag(ctx context.Context, boardID, name string) (*domain.Tag, error)

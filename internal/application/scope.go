@@ -516,3 +516,67 @@ func (p *ScopedPort) DeleteWorkspace(_ context.Context, workspaceID string) erro
 // checks it (through this port) before calling.
 
 var _ Port = (*ScopedPort)(nil)
+
+// ---- assets & automations --------------------------------------------------
+
+// ListItemAssets checks the owning item before reading file metadata.
+func (p *ScopedPort) ListItemAssets(ctx context.Context, itemID, source string, columnIDs []string) ([]domain.Asset, error) {
+	if err := p.checkItem(ctx, itemID); err != nil {
+		return nil, err
+	}
+	return p.Port.ListItemAssets(ctx, itemID, source, columnIDs)
+}
+
+// ListUpdateAssets cannot infer an update's board from its opaque ID alone.
+// The application requires item_id in scoped mode, so reaching this method
+// means ownership has already been verified. The port remains explicit about
+// that contract rather than silently becoming account-wide.
+func (p *ScopedPort) ListUpdateAssets(ctx context.Context, updateID string) ([]domain.Asset, error) {
+	return p.Port.ListUpdateAssets(ctx, updateID)
+}
+
+// ListAutomations checks the board before exposing provider automation data.
+func (p *ScopedPort) ListAutomations(ctx context.Context, boardID string, limit int, cursor string, includeLegacy bool) (domain.AutomationPage, error) {
+	if err := p.checkBoard(ctx, boardID); err != nil {
+		return domain.AutomationPage{}, err
+	}
+	return p.Port.ListAutomations(ctx, boardID, limit, cursor, includeLegacy)
+}
+
+// AutomationTotals refuses account-wide automation statistics in scoped mode.
+func (p *ScopedPort) AutomationTotals(ctx context.Context, boardID string, userIDs []string) (domain.AutomationStatistics, error) {
+	if boardID == "" {
+		return domain.AutomationStatistics{}, &ScopeError{Resource: "automation statistics", ID: "(account-wide)", Scope: p.workspace}
+	}
+	if err := p.checkBoard(ctx, boardID); err != nil {
+		return domain.AutomationStatistics{}, err
+	}
+	return p.Port.AutomationTotals(ctx, boardID, userIDs)
+}
+
+// AutomationEntityTotals refuses account-wide automation statistics in scoped mode.
+func (p *ScopedPort) AutomationEntityTotals(ctx context.Context, runStatus, boardID string, userIDs, excludedAutomationIDs []string) (domain.AutomationEntityStatistics, error) {
+	if boardID == "" {
+		return domain.AutomationEntityStatistics{}, &ScopeError{Resource: "automation statistics", ID: "(account-wide)", Scope: p.workspace}
+	}
+	if err := p.checkBoard(ctx, boardID); err != nil {
+		return domain.AutomationEntityStatistics{}, err
+	}
+	return p.Port.AutomationEntityTotals(ctx, runStatus, boardID, userIDs, excludedAutomationIDs)
+}
+
+// ListAutomationRuns confines execution history to a board or verified item.
+func (p *ScopedPort) ListAutomationRuns(ctx context.Context, boardID string, offset int, states, automationIDs []string, itemID string) (domain.AutomationRunPage, error) {
+	if boardID != "" {
+		if err := p.checkBoard(ctx, boardID); err != nil {
+			return domain.AutomationRunPage{}, err
+		}
+	} else if itemID != "" {
+		if err := p.checkItem(ctx, itemID); err != nil {
+			return domain.AutomationRunPage{}, err
+		}
+	} else {
+		return domain.AutomationRunPage{}, &ScopeError{Resource: "automation runs", ID: "(account-wide)", Scope: p.workspace}
+	}
+	return p.Port.ListAutomationRuns(ctx, boardID, offset, states, automationIDs, itemID)
+}

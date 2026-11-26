@@ -227,3 +227,85 @@ type ItemFilter struct {
 	Rules    []ItemFilterRule `json:"rules,omitempty"`
 	Operator string           `json:"operator,omitempty"`
 }
+
+// Asset is metadata for a file attached to an item, update, or file column.
+// Public URLs expire; tools return them as provider metadata, never as durable links.
+type Asset struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	URL           string   `json:"url,omitempty"`
+	PublicURL     string   `json:"public_url,omitempty"`
+	ThumbnailURL  string   `json:"url_thumbnail,omitempty"`
+	FileExtension string   `json:"file_extension,omitempty"`
+	FileSize      int      `json:"file_size,omitempty"`
+	CreatedAt     string   `json:"created_at,omitempty"`
+	UploadedBy    *UserRef `json:"uploaded_by,omitempty"`
+}
+
+// Automation is one monday board automation/live workflow as exposed by the
+// board_automations API. Configuration payloads are provider-owned JSON and
+// are passed through without interpreting secrets or credentials.
+type Automation struct {
+	ID                  string `json:"id"`
+	Title               string `json:"title"`
+	Description         string `json:"description,omitempty"`
+	Active              bool   `json:"active"`
+	UserID              any    `json:"user_id,omitempty"`
+	CreatedAt           string `json:"created_at,omitempty"`
+	UpdatedAt           string `json:"updated_at,omitempty"`
+	WorkflowHostData    any    `json:"workflow_host_data,omitempty"`
+	WorkflowBlocks      any    `json:"workflow_blocks,omitempty"`
+	WorkflowVariables   any    `json:"workflow_variables,omitempty"`
+	Importance          int    `json:"importance,omitempty"`
+	NoticeMessage       string `json:"notice_message,omitempty"`
+	TemplateReferenceID string `json:"template_reference_id,omitempty"`
+}
+
+// AutomationPage is one cursor page of board automations.
+type AutomationPage struct {
+	Automations []Automation `json:"automations"`
+	Cursor      string       `json:"cursor,omitempty"`
+	HasMore     bool         `json:"has_more"`
+	Legacy      any          `json:"legacy_automations,omitempty"`
+}
+
+// AutomationStatistics is an account/board aggregate of automation outcomes.
+type AutomationStatistics struct {
+	ID      string `json:"id,omitempty"`
+	Success int    `json:"success"`
+	Failure int    `json:"failure"`
+	Total   int    `json:"total"`
+}
+
+// AutomationEntityStatistics breaks outcomes down by automation/workflow.
+type AutomationEntityStatistics struct {
+	ID                   string `json:"id,omitempty"`
+	AutomationStatistics any    `json:"automation_statistics,omitempty"`
+	WorkflowStatistics   any    `json:"workflow_statistics,omitempty"`
+}
+
+// AutomationRun is one workflow/automation trigger event.
+type AutomationRun struct {
+	TriggerUUID                  string  `json:"triggerUuid,omitempty"`
+	EventState                   string  `json:"eventState,omitempty"`
+	EventKind                    string  `json:"eventKind,omitempty"`
+	TriggerStartedAt             string  `json:"triggerStartedAt,omitempty"`
+	CreatedAt                    string  `json:"createdAt,omitempty"`
+	TriggerDuration              float64 `json:"triggerDuration,omitempty"`
+	ErrorReason                  string  `json:"errorReason,omitempty"`
+	EntityKind                   string  `json:"entityKind,omitempty"`
+	HostType                     string  `json:"hostType,omitempty"`
+	HostInstanceID               string  `json:"hostInstanceId,omitempty"`
+	BillingActionsCount          int     `json:"billingActionsCount,omitempty"`
+	CreatorAppFeatureReferenceID string  `json:"creatorAppFeatureReferenceId,omitempty"`
+	WaitingForTriggerName        string  `json:"waitingForTriggerName,omitempty"`
+	ReignitionSubscriptionID     string  `json:"reignitionSubscriptionId,omitempty"`
+}
+
+// AutomationRunPage is a bounded offset page of automation runs.
+type AutomationRunPage struct {
+	Runs        []AutomationRun `json:"runs"`
+	Offset      int             `json:"offset"`
+	Count       int             `json:"count"`
+	StateCounts map[string]int  `json:"state_counts"`
+}

@@ -255,4 +255,18 @@ func registerPrompts(server *mcp.Server) {
 			text := fmt.Sprintf("Run daily_standup for board %s and list_board_updates (limit 20). Write a concise standup: done, in progress, blockers with owners, and overdue risks.", board)
 			return &mcp.GetPromptResult{Description: "Standup digest", Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: text}}}}, nil
 		})
+	server.AddPrompt(&mcp.Prompt{Name: "automation_health_review", Title: "Automation health review", Description: "Review native automation configuration and failure signals before changing anything.", Arguments: boardArg},
+		func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			board := req.Params.Arguments["board_id"]
+			text := fmt.Sprintf("Run list_automations, get_automation_statistics, and list_automation_runs for board %s. Summarize active/inactive coverage, failure and exhaustion signals, and the riskiest automations. "+
+				"If a change is needed, prefer manage_automation action=deactivate over deletion, verify ownership first, and never create or modify workflows with embedded credential secrets.", board)
+			return &mcp.GetPromptResult{Description: "Automation health review", Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: text}}}}, nil
+		})
+	server.AddPrompt(&mcp.Prompt{Name: "flow_metrics_review", Title: "Flow metrics review", Description: "Analyze throughput, bottlenecks, WIP, aging, and workload with explicit proxy caveats.", Arguments: boardArg},
+		func(_ context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			board := req.Params.Arguments["board_id"]
+			text := fmt.Sprintf("Run board_flow_metrics, workload_report, overdue_items, and stale_items for board %s. Explain throughput, bottleneck status/group, WIP, aging and completion trends. "+
+				"Call out truncated samples and proxy caveats, then propose validated dry-run-first workflow actions only where the evidence supports them.", board)
+			return &mcp.GetPromptResult{Description: "Flow metrics review", Messages: []*mcp.PromptMessage{{Role: "user", Content: &mcp.TextContent{Text: text}}}}, nil
+		})
 }

@@ -9,7 +9,7 @@ A high-performance, Docker-first [Model Context Protocol](https://modelcontextpr
 
 ## Features
 
-- **105 typed MCP tools** (98 at the default access level, plus 7 permanent deletes at `full`) across workspaces, boards, groups, columns, items, bulk operations, users and teams, updates, tags, reports, dependency management, verification, and program-scale rollups — plus 2 reusable prompts.
+- **119 typed MCP tools** (111 at the default access level, plus 8 permanent deletes at `full`) across workspaces, boards, groups, columns, items, bulk operations, users and teams, updates, tags, reports, dependency management, verification, and program-scale rollups — plus 4 reusable prompts.
 - **Validated writes** — friendly column values (`"Done"`, `"2026-10-01"`, `[user_id]`) are checked against the live board schema and converted to monday JSON before any mutation. See [docs/COLUMN_VALUES.md](docs/COLUMN_VALUES.md).
 - **Safe by construction** — archive by default, permanent deletes only at `MCP_ACCESS_LEVEL=full` with `confirm: true`, `confirm` gates on board/group archive, bulk operations capped at 50 rows with `dry_run: true` by default and all-or-nothing validation.
 - **Access levels and write policy** — `MCP_ACCESS_LEVEL=read|write|full` decides which tools exist; `MCP_WRITE_TOOL_ALLOWLIST` can narrow the exposed non-read tools without hiding reads; `MONDAY_WORKSPACE_ID` confines the server to one workspace; board and workspace allowlists fence mutations. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
@@ -42,14 +42,15 @@ Only Docker and Docker Compose are required on the host. Go, tests, formatting, 
 | Boards | `list_boards`, `get_board`, `get_board_schema`, `create_board`, `update_board`, `archive_board`, `duplicate_board`, `add_board_subscribers`, `list_board_templates`, `provision_board_from_template` |
 | Groups | `list_board_groups`, `create_group`, `update_group`, `duplicate_group`, `archive_group` |
 | Columns | `list_board_columns`, `create_column`, `update_column`, `describe_column_formats` |
-| Items — read | `list_items`, `list_group_items`, `search_items`, `find_items_by_column_values`, `find_item_by_text`, `get_item`, `get_items`, `list_subitems`, `get_item_dependencies`, `verify_item_columns`, `validate_column_values` |
+| Items — read | `list_items`, `list_group_items`, `search_items`, `find_items_by_column_values`, `find_item_by_text`, `get_item`, `get_items`, `list_subitems`, `get_item_dependencies`, `verify_item_columns`, `validate_column_values`, `list_item_assets` |
 | Items — write | `create_item`, `create_subitem`, `update_item_column_values`, `set_item_status`, `set_item_date`, `set_item_dependencies`, `assign_item_people`, `rename_item`, `move_item`, `move_item_to_board`, `duplicate_item`, `archive_item` |
-| Bulk | `bulk_update_items`, `bulk_move_items`, `bulk_archive_items`, `bulk_create_updates`, `bulk_set_people`, `bulk_set_dates` |
+| Bulk | `bulk_update_items`, `bulk_create_items`, `import_board_table`, `bulk_move_items`, `bulk_archive_items`, `bulk_create_updates`, `bulk_set_people`, `bulk_set_dates` |
 | People | `list_users`, `search_users`, `get_user`, `list_teams` |
-| Collaboration | `list_item_updates`, `list_board_updates`, `create_update`, `reply_to_update`, `like_update`, `notify_user` |
+| Collaboration | `list_item_updates`, `list_board_updates`, `create_update`, `reply_to_update`, `like_update`, `notify_user`, `list_update_assets` |
 | Tags | `list_tags`, `create_or_get_tag` |
-| Permanent deletes (`full` only) | `delete_item`, `delete_group`, `delete_board`, `delete_column`, `delete_update`, `delete_folder`, `delete_workspace` |
-| Reports | `board_summary`, `board_progress_report`, `column_distribution`, `workload_report`, `overdue_items`, `stale_items`, `daily_standup`, `board_health_report`, `timeline_dependency_preview`, `subitems_status_rollup`, `export_board_markdown`, `export_board_csv`, `workspace_overview` |
+| Permanent deletes (`full` only) | `delete_item`, `delete_group`, `delete_board`, `delete_column`, `delete_update`, `delete_folder`, `delete_workspace`, `delete_automation` |
+| Automations and workflows | `list_automations`, `create_automation`, `manage_automation`, `get_automation_statistics`, `list_automation_runs`, `run_board_automation`, `complete_item`, `handoff_item` |
+| Reports | `board_flow_metrics`, `board_summary`, `board_progress_report`, `column_distribution`, `workload_report`, `overdue_items`, `stale_items`, `daily_standup`, `board_health_report`, `timeline_dependency_preview`, `subitems_status_rollup`, `export_board_markdown`, `export_board_csv`, `workspace_overview` |
 
 Full reference with modes and capabilities: [docs/TOOLS.md](docs/TOOLS.md).
 

@@ -206,6 +206,8 @@ func NewWithService(svc *application.Service, options Options) (*mcp.Server, []T
 	registerReportTools(r)
 	registerProgramTools(r)
 	registerQualityTools(r)
+	registerAutomationTools(r)
+	registerWorkflowTools(r)
 	registerDeleteTools(r)
 	registerPrompts(server)
 	if err := r.validateWriteToolAllowlist(); err != nil {

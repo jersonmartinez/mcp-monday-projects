@@ -23,7 +23,7 @@ and an actionable message; the token and raw API payloads are never echoed.
 
 <!-- tools:begin -->
 
-_105 tools, generated from `list_tool_catalog`._
+_119 tools, generated from `list_tool_catalog`._
 
 ### Diagnostics
 
@@ -93,6 +93,7 @@ _105 tools, generated from `list_tool_catalog`._
 | `get_items` | read | `items.read` | Get up to 100 items by ID in one request. |
 | `item_integration_payload` | read | `items.read` | Build a stable idempotent payload for synchronizing a Monday item with GitHub, n8n, or another system. |
 | `list_group_items` | read | `items.read` | Read one cursor page of items in a single group. |
+| `list_item_assets` | read | `items.read` | List file metadata attached to an item, file columns, gallery, and current-version update attachments. Expiring URLs are hidden unless include_urls=true. |
 | `list_items` | read | `items.read` | Read one cursor page of board items with column values; pass the returned cursor to continue. Supports server-side filter rules. |
 | `list_items_all` | read | `items.read` | Load all visible board items up to explicit max_items/max_pages bounds and report truncation warnings. |
 | `list_subitems` | read | `items.read` | List the subitems of an item. |
@@ -123,11 +124,13 @@ _105 tools, generated from `list_tool_catalog`._
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
 | `bulk_archive_items` | write · archive | `items.write` | Archive (never delete) up to 50 items. dry_run defaults to true. |
+| `bulk_create_items` | write | `items.write` | Validate and create up to 50 items. dry_run defaults to true; duplicate names in the batch and any invalid row stop the write. |
 | `bulk_create_updates` | write | `items.write` | Publish one update per item with per-item results; dry_run defaults to true. |
 | `bulk_move_items` | write | `items.write` | Move up to 50 items to a group. dry_run defaults to true. |
 | `bulk_set_dates` | write | `items.write` | Validate and set date values for up to 50 items with persisted-value warnings. |
 | `bulk_set_people` | write | `items.write` | Validate and set people values for up to 50 items with the normal dry-run safety gate. |
 | `bulk_update_items` | write | `items.write` | Validate and apply column values to up to 50 items. dry_run defaults to true; nothing is written if any row is invalid. |
+| `import_board_table` | write | `items.write` | Import CSV or Markdown rows as items with the same validation and dry_run-first behavior as bulk_create_items. |
 
 ### Users and teams
 
@@ -151,6 +154,7 @@ _105 tools, generated from `list_tool_catalog`._
 | `like_update` | write | `collaboration.write` | Like an update. |
 | `list_board_updates` | read | `collaboration.read` | List the most recent updates across a board — an activity feed. |
 | `list_item_updates` | read | `collaboration.read` | List an item's updates (comments) with replies and authors. |
+| `list_update_assets` | read | `collaboration.read` | List file metadata attached to an update. Pass item_id when known so ownership and workspace scope are verified. |
 | `notify_user` | write | `collaboration.write` | Send a monday bell notification to a user about an item or update. |
 | `reply_to_update` | write | `collaboration.write` | Reply to an existing update. |
 
@@ -165,6 +169,7 @@ _105 tools, generated from `list_tool_catalog`._
 
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
+| `board_flow_metrics` | read | `reports.read` | Project execution statistics: throughput proxy, WIP by status/group, bottlenecks, workload, overdue/stale work, completion ratio, and aging/cycle-time approximations. |
 | `board_health_report` | read | `reports.read` | Score a board 0-100 (grade A-D) from overdue, blocked, stale, and unassigned work, with explained signals and Markdown. |
 | `board_progress_report` | read | `reports.read` | Roll up planned and spent numeric effort by status and optional phase, including item and effort percentages. |
 | `board_risk_report` | read | `reports.read` | Return a compact, actionable risk view with due-soon, overdue, blocked, and unassigned items plus a 0-100 score. |
@@ -183,10 +188,24 @@ _105 tools, generated from `list_tool_catalog`._
 | `workload_report` | read | `reports.read` | Open, done, overdue, and blocked items per assignee of the owner column. |
 | `workspace_overview` | read | `reports.read` | Overview of a workspace: active boards (excluding subitem boards), item totals, and URLs. |
 
+### Automations and workflows
+
+| Tool | Mode | Capability | Description |
+|---|---|---|---|
+| `complete_item` | write | `automation.write` | Validate and execute a completion workflow: set a Done-like status, optionally move to a closing group, and optionally post a completion update. Multi-step, auditable, and dry-run by default. |
+| `create_automation` | write | `automation.write` | Create a native monday board automation from a template reference or expert-authored workflow JSON. Uses monday's preview workflow API, is dry-run by default, and never accepts embedded credential secrets. |
+| `get_automation_statistics` | read | `automation.read` | Aggregate native automation success/failure totals or per-entity breakdowns. Uses monday's versioned automation statistics API. |
+| `handoff_item` | write | `automation.write` | Transfer ownership to resolved monday users, optionally change workflow status, and post a handoff update in one guarded multi-step workflow. Dry-run by default. |
+| `list_automation_runs` | read | `automation.read` | Read one bounded offset page of native automation/workflow execution history with state counts. |
+| `list_automations` | read | `automation.read` | List native monday board automations with active state and provider configuration. Uses the API version where board_automations is available; some legacy automations may be read-only. |
+| `manage_automation` | write | `automation.write` | Activate or deactivate a native automation after verifying it belongs to the board. Use delete_automation only when permanent removal is explicit. |
+| `run_board_automation` | write | `automation.write` | Evaluate deterministic workflow rules against a bounded board snapshot and optionally apply status/column updates, moves, and updates/comments. This complements native monday automations and is dry-run by default. |
+
 ### Permanent deletes (MCP_ACCESS_LEVEL=full)
 
 | Tool | Mode | Capability | Description |
 |---|---|---|---|
+| `delete_automation` | full · permanent delete | `automation.delete` | PERMANENTLY delete a native automation after verifying board ownership (MCP_ACCESS_LEVEL=full). Requires confirm=true; prefer manage_automation action=deactivate. |
 | `delete_board` | full · permanent delete | `boards.delete` | PERMANENTLY delete a board (MCP_ACCESS_LEVEL=full). Requires confirm=true; prefer archive_board. |
 | `delete_column` | full · permanent delete | `columns.delete` | PERMANENTLY delete a column and all of its values (MCP_ACCESS_LEVEL=full). Requires confirm=true. The name column cannot be deleted. |
 | `delete_folder` | full · permanent delete | `workspaces.delete` | PERMANENTLY delete a workspace folder and the boards inside it (MCP_ACCESS_LEVEL=full). Requires confirm=true. |
@@ -223,6 +242,8 @@ Aggregations are bounded by `max_items` and return `truncated`/`warnings` instea
 |---|---|---|
 | `board_health_review` | `board_id` | Runs the health and workload reports and proposes up to five concrete, validated actions. |
 | `standup_digest` | `board_id` | Builds a team standup from `daily_standup` and the board update feed. |
+| `automation_health_review` | `board_id` | Reviews native automation configuration, outcome statistics, and failure history before recommending reversible control actions. |
+| `flow_metrics_review` | `board_id` | Explains throughput, bottlenecks, WIP, aging, workload, proxy caveats, and evidence-backed dry-run-first next actions. |
 
 ## Examples
 

@@ -102,6 +102,29 @@ nothing if any row is invalid:
 {"name": "bulk_move_items", "arguments": {"item_ids": ["9876543210", "9876543211"], "group_id": "done", "dry_run": false}}
 ```
 
+### Create or import many rows
+
+`bulk_create_items` validates the complete batch before the first write. Rows
+accept a `group_id` or exact group title and friendly `column_values`; duplicate
+names inside the batch are rejected so re-running an import is less likely to
+create accidental doubles.
+
+```json
+{"name": "bulk_create_items", "arguments": {"board_id": "1234567890",
+  "rows": [{"name": "Prepare release", "group_id": "todo",
+    "column_values": {"status": "Working on it", "due": "2026-11-30"}}]}}
+```
+
+`import_board_table` accepts CSV or Markdown. A `name` column is required;
+`group` is optional and every other header resolves as a column ID or exact
+column title. The default call is a plan. Apply only after reviewing it:
+
+```json
+{"name": "import_board_table", "arguments": {"board_id": "1234567890", "format": "markdown",
+  "text": "| name | group | status |\n|---|---|---|\n| Alpha | To Do | Done |",
+  "dry_run": false}}
+```
+
 ## 6. Archive and delete
 
 Archiving is the default destructive verb and is restorable from monday's
@@ -119,7 +142,19 @@ Permanent `delete_*` tools exist only at `MCP_ACCESS_LEVEL=full`, require
 {"name": "delete_item", "arguments": {"item_id": "9876543210", "confirm": true}}
 ```
 
-## 7. Collaborate
+## 7. Inspect file assets
+
+`list_item_assets` returns file metadata for an item, its file columns and
+gallery; `list_update_assets` does the same for one update. Expiring provider
+URLs are redacted unless `include_urls` is true. Pass `item_id` with an update
+whenever possible so ownership is verified before reading metadata.
+
+```json
+{"name": "list_item_assets", "arguments": {"item_id": "9876543210"}}
+{"name": "list_update_assets", "arguments": {"update_id": "5555555555", "item_id": "9876543210"}}
+```
+
+## 8. Collaborate
 
 ```json
 {"name": "create_update", "arguments": {"item_id": "9876543210", "body": "Deployed to staging."}}
@@ -130,7 +165,80 @@ Permanent `delete_*` tools exist only at `MCP_ACCESS_LEVEL=full`, require
 With `MONDAY_WORKSPACE_ID` set, notify on the item (`target_type: "Project"`);
 `Post` targets are refused because an update's workspace cannot be verified.
 
-## 8. Reports
+## 9. Automations, workflows, and flow statistics
+
+Native monday automations are inspected separately from deterministic MCP
+workflow execution:
+
+```json
+{"name": "list_automations", "arguments": {"board_id": "1234567890"}}
+{"name": "get_automation_statistics", "arguments": {"board_id": "1234567890"}}
+{"name": "list_automation_runs", "arguments": {"board_id": "1234567890", "states": ["failure"], "offset": 0}}
+```
+
+`manage_automation` verifies that the automation belongs to the board before
+activating or deactivating it. Permanent removal is isolated in
+`delete_automation`, which exists only at `MCP_ACCESS_LEVEL=full`, requires
+`confirm: true`, and performs the same ownership proof; prefer `deactivate`
+unless removal is intentional.
+
+```json
+{"name": "manage_automation", "arguments": {"board_id": "1234567890",
+  "automation_id": "777777777", "action": "deactivate"}}
+{"name": "delete_automation", "arguments": {"board_id": "1234567890",
+  "automation_id": "777777777", "confirm": true}}
+```
+
+`create_automation` completes the native lifecycle for operators who have a
+template reference or expert-authored workflow JSON. It uses monday's preview
+workflow API, so the call is intentionally dry-run-first and the provider remains
+the authoritative validator of block definitions. Pass either
+`template_reference_id` (plus optional `workflow_variables_values`) or both
+`workflow_blocks` and `workflow_variables`; never embed credential secrets in the
+JSON. The default call validates the mode, board, size, and input combinations
+without creating anything:
+
+```json
+{"name": "create_automation", "arguments": {"board_id": "1234567890",
+  "title": "Close completed work", "template_reference_id": "777777777",
+  "workflow_variables_values": {"status": "Done"}}}
+```
+
+Set `dry_run: false` only after reviewing the plan, then verify the result with
+`list_automations`. For deterministic one-shot transitions, patterns that do not
+map cleanly to provider blocks, or environments where the preview creation API is
+unavailable, use `run_board_automation`. Rules are evaluated in order, the first
+matching rule wins, and the default call only plans matching rows:
+
+```json
+{"name": "run_board_automation", "arguments": {"board_id": "1234567890",
+  "rules": [{"name": "finish-ready", "column_id": "status", "operator": "equals",
+    "value": "Ready", "set_column_values": {"status": "Done"},
+    "update_body": "Closed by reviewed MCP automation."}]}}
+```
+
+`complete_item` and `handoff_item` package common multi-step flows. Both are
+dry-run by default, validate values against the live schema before writing,
+and report exactly which steps were planned or applied:
+
+```json
+{"name": "complete_item", "arguments": {"item_id": "9876543210", "done_value": "Done",
+  "move_group_id": "done", "update_body": "Completed and verified."}}
+{"name": "handoff_item", "arguments": {"item_id": "9876543210", "assignees": [12345678],
+  "status_column_id": "status", "status_value": "Working on it",
+  "update_body": "Handoff after triage."}}
+```
+
+`board_flow_metrics` reports throughput, WIP, bottleneck, workload, aging,
+overdue and completion statistics. Completion and cycle-time fields are
+explicit proxies derived from current status plus update timestamps, not an
+immutable transition-event stream.
+
+```json
+{"name": "board_flow_metrics", "arguments": {"board_id": "1234567890", "window_days": 30}}
+```
+
+## 10. Reports
 
 Reports detect the status, date and people columns automatically; override
 with `status_column_id`, `date_column_id`, `people_column_id`. They load at
@@ -147,10 +255,11 @@ larger. Semantics and the health score: [REPORTS.md](REPORTS.md).
 {"name": "export_board_markdown", "arguments": {"board_id": "1234567890"}}
 ```
 
-The prompts `board_health_review` and `standup_digest` chain these reports for
-an MCP client ([TOOLS.md](TOOLS.md#prompts)).
+The prompts `board_health_review`, `standup_digest`, `automation_health_review`,
+and `flow_metrics_review` chain these reports and automation signals for an MCP
+client ([TOOLS.md](TOOLS.md#prompts)).
 
-## 9. Boards from templates
+## 11. Boards from templates
 
 ```json
 {"name": "list_board_templates", "arguments": {}}
@@ -164,7 +273,7 @@ additive (nothing is deleted) and validates seed values against the new
 board. A board created in the session stays writable for that session even
 under a board allowlist.
 
-## 10. Try it from the command line
+## 12. Try it from the command line
 
 `scripts/mcp_probe.py` runs the image with your `.env` and calls one tool:
 
@@ -175,7 +284,7 @@ python3 scripts/mcp_probe.py server_info '{}' -e MCP_ACCESS_LEVEL=read
 python3 scripts/mcp_probe.py --list -e MCP_ACCESS_LEVEL=full
 ```
 
-## 11. Format updates for Monday
+## 13. Format updates for Monday
 
 `create_update` and `reply_to_update` convert Markdown-like input to sanitized HTML before sending it to Monday. Monday does not render GitHub Markdown in update bodies, so headings, lists, links, tables, inline backticks and fenced commands must pass through this formatter. Raw HTML is escaped so placeholders and technical content remain visible instead of being removed by sanitization.
 
@@ -191,7 +300,7 @@ El tool `edit_update` usa la mutation oficial `edit_update(id, body)` de Monday.
 
 Use `edit_update` para corregir formato o migrar comentarios existentes. No cree un nuevo `create_update` si la intención es preservar el historial y el enlace del comentario.
 
-## 12. Trazabilidad y visibilidad por proyecto
+## 14. Trazabilidad y visibilidad por proyecto
 
 Prácticas para que un proyecto sea rastreable y fácil de reportar con las herramientas del servidor.
 
@@ -221,7 +330,7 @@ la trazabilidad funcione en ambos sentidos.
 - `assign_item_people` acepta **varios** `user_ids`: asigne a **todas** las personas responsables de un item en
   una sola llamada (no reparta un item entre asignados distintos si el trabajo es conjunto).
 
-## 13. Reconcile a large program safely
+## 15. Reconcile a large program safely
 
 Use `list_subitems` with `column_ids` to fetch only the subitem cells needed by a synchronization pass. `find_item_by_text` searches item names and visible text/link/long-text cells when an external reference is not in the item name.
 

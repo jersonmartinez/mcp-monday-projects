@@ -34,6 +34,7 @@ TITLES = {
     "collaboration": "Updates and notifications",
     "tags": "Tags",
     "reports": "Reports",
+    "automation": "Automations and workflows",
     "deletes": "Permanent deletes (MCP_ACCESS_LEVEL=full)",
 }
 
@@ -58,7 +59,9 @@ def render() -> str:
         elif tool.get("permanent"):
             mode = "full · permanent delete"
         elif tool["destructive"]:
-            mode = "write · archive"
+            mode = "write · destructive"
+            if tool["name"].startswith("archive_") or tool["name"] == "bulk_archive_items":
+                mode = "write · archive"
         else:
             mode = "write"
         description = tool["description"].replace("|", "\\|")
