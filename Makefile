@@ -6,8 +6,10 @@ SMOKE_BOARD ?=
 SMOKE_WORKSPACE ?=
 SMOKE_USER ?=
 SMOKE_REPORT ?= smoke-report.md
+OAUTH_DIR ?= $(HOME)/.config/mcp-monday
+OAUTH_TOKEN_FILE ?= $(OAUTH_DIR)/oauth.json
 
-.PHONY: help build up run down logs test race fmt fmt-check vet coverage lint wiki-preview validate clean probe tools smoke smoke-provision docs-tools
+.PHONY: help build up run down logs test race fmt fmt-check vet coverage lint wiki-preview validate clean probe tools smoke smoke-provision docs-tools oauth-login oauth-refresh oauth-status oauth-logout
 
 help: ## Show available Docker-first targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -55,6 +57,31 @@ smoke: build ## Real-account smoke suite: make smoke SMOKE_BOARD=<sandbox board>
 
 smoke-provision: build ## Create a devops template board: make smoke-provision SMOKE_WORKSPACE=<id>
 	python3 scripts/smoke.py --provision --workspace $(SMOKE_WORKSPACE) $(if $(SMOKE_USER),--assign-user $(SMOKE_USER)) --report $(SMOKE_REPORT)
+
+oauth-login: build ## Open Monday OAuth 2.1 in a browser and store a per-user token
+	mkdir -p "$(OAUTH_DIR)"
+	docker run --rm -it --env-file .env \
+		-e MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json \
+		-v "$(OAUTH_DIR):/oauth" \
+		--entrypoint /mcp-monday-oauth $(IMAGE) login
+
+oauth-refresh: build ## Refresh the stored Monday OAuth token
+	docker run --rm -i --env-file .env \
+		-e MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json \
+		-v "$(OAUTH_DIR):/oauth" \
+		--entrypoint /mcp-monday-oauth $(IMAGE) refresh
+
+oauth-status: build ## Show Monday OAuth token metadata without the token
+	docker run --rm -i --env-file .env \
+		-e MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json \
+		-v "$(OAUTH_DIR):/oauth:ro" \
+		--entrypoint /mcp-monday-oauth $(IMAGE) status
+
+oauth-logout: build ## Revoke Monday OAuth authorization and remove the local token
+	docker run --rm -i --env-file .env \
+		-e MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json \
+		-v "$(OAUTH_DIR):/oauth" \
+		--entrypoint /mcp-monday-oauth $(IMAGE) logout
 
 docs-tools: build ## Regenerate the tool catalog in docs/TOOLS.md
 	python3 scripts/gen_tool_docs.py
