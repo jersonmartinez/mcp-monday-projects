@@ -21,7 +21,7 @@ import (
 )
 
 // expectedToolCount is the write-level catalog; full adds the delete tools.
-const expectedToolCount = 96
+const expectedToolCount = 98
 
 const expectedDeleteTools = 7
 
@@ -184,6 +184,39 @@ func TestWriteToolAllowlistKeepsReadsAndOnlyListedWrites(t *testing.T) {
 	}
 }
 
+func TestToolProfilesNarrowDiscoverySurface(t *testing.T) {
+	build := func(profile string) map[string]bool {
+		port := applicationtest.NewFakePort()
+		svc := application.NewService(port, application.Options{})
+		_, catalog, err := mcpserver.NewWithService(svc, mcpserver.Options{AccessLevel: config.AccessWrite, ToolProfile: profile})
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen := map[string]bool{}
+		for _, spec := range catalog {
+			seen[spec.Name] = true
+		}
+		return seen
+	}
+
+	developer := build(config.ToolProfileDeveloper)
+	if !developer["create_item"] || !developer["list_items"] || developer["create_board"] || developer["create_workspace"] {
+		t.Fatalf("developer profile exposed wrong surface: %v", developer)
+	}
+	manager := build(config.ToolProfileProjectManager)
+	if !manager["create_board"] || !manager["bulk_update_items"] || manager["create_workspace"] {
+		t.Fatalf("project_manager profile exposed wrong surface: %v", manager)
+	}
+	devops := build(config.ToolProfileDevOps)
+	if !devops["create_workspace"] || !devops["provision_board_from_template"] {
+		t.Fatalf("devops profile missing provisioning surface: %v", devops)
+	}
+	readOnly := build(config.ToolProfileReadOnly)
+	if readOnly["create_item"] || !readOnly["board_summary"] || !readOnly["search_tools"] {
+		t.Fatalf("read_only profile exposed wrong surface: %v", readOnly)
+	}
+}
+
 func TestWriteToolAllowlistRejectsUnknownNames(t *testing.T) {
 	port := applicationtest.NewFakePort()
 	svc := application.NewService(port, application.Options{})
@@ -206,6 +239,24 @@ func TestReadOnlyModeHidesWriteTools(t *testing.T) {
 	}
 	if policy := info["write_policy"].(map[string]any); policy["read_only"] != true {
 		t.Fatalf("policy = %v", policy)
+	}
+}
+
+func TestSearchToolsAndOperationalMetrics(t *testing.T) {
+	session, _, _ := connect(t, false)
+	_, search := call(t, session, "search_tools", map[string]any{"query": "bulk", "limit": 3})
+	if search["count"].(float64) == 0 || search["count"].(float64) > 3 {
+		t.Fatalf("search_tools = %v", search)
+	}
+	_, _ = call(t, session, "server_info", nil)
+	_, metrics := call(t, session, "get_operational_metrics", map[string]any{"tool": "server_info"})
+	tools := metrics["tools"].([]any)
+	if len(tools) != 1 {
+		t.Fatalf("metrics tools = %v", metrics)
+	}
+	entry := tools[0].(map[string]any)
+	if entry["name"] != "server_info" || entry["calls"].(float64) != 1 || entry["errors"].(float64) != 0 {
+		t.Fatalf("server_info metric = %v", entry)
 	}
 }
 
@@ -435,7 +486,7 @@ func TestStableToolSchemas(t *testing.T) {
 	}
 	sum := sha256.Sum256(raw)
 	got := hex.EncodeToString(sum[:])
-	const expected = "a9b64248aaaa8b294ee4c3cf980b8e12c5c32335d28a57c594e6be4321faecb9"
+	const expected = "0cdf46ea05f05d04ee7903aa96f717d38e514835fe387b9135fe1c0c0464ff41"
 	if got != expected {
 		t.Fatalf("stable tool schema digest changed: got %s; update intentionally with release notes", got)
 	}

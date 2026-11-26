@@ -152,12 +152,13 @@ func (s *Service) checkItem(ctx context.Context, itemID string) (string, error) 
 
 // Service is the application facade used by the MCP layer.
 type Service struct {
-	port           Port
-	guard          *WriteGuard
-	now            func() time.Time
-	reportMaxItems int
-	scope          string
-	allowDelete    bool
+	port               Port
+	guard              *WriteGuard
+	now                func() time.Time
+	reportMaxItems     int
+	scope              string
+	allowDelete        bool
+	bulkMaxConcurrency int
 }
 
 // Options configures a Service.
@@ -169,6 +170,8 @@ type Options struct {
 	WorkspaceScope string
 	// AllowDelete enables permanent deletes (MCP_ACCESS_LEVEL=full).
 	AllowDelete bool
+	// BulkMaxConcurrency bounds independent mutations inside bulk tools.
+	BulkMaxConcurrency int
 }
 
 // NewService builds the application service.
@@ -182,10 +185,16 @@ func NewService(port Port, options Options) *Service {
 	if options.ReportMaxItems <= 0 {
 		options.ReportMaxItems = 500
 	}
+	if options.BulkMaxConcurrency <= 0 {
+		options.BulkMaxConcurrency = 4
+	}
+	if options.BulkMaxConcurrency > 10 {
+		options.BulkMaxConcurrency = 10
+	}
 	if options.WorkspaceScope != "" {
 		port = NewScopedPort(port, options.WorkspaceScope)
 	}
-	return &Service{port: port, guard: options.Guard, now: options.Now, reportMaxItems: options.ReportMaxItems, scope: options.WorkspaceScope, allowDelete: options.AllowDelete}
+	return &Service{port: port, guard: options.Guard, now: options.Now, reportMaxItems: options.ReportMaxItems, scope: options.WorkspaceScope, allowDelete: options.AllowDelete, bulkMaxConcurrency: options.BulkMaxConcurrency}
 }
 
 // WorkspaceScope returns the configured workspace scope, or "" when unscoped.

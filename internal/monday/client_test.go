@@ -2,6 +2,7 @@ package monday
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -81,5 +82,55 @@ func TestClientRetriesRateLimit(t *testing.T) {
 	}
 	if attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestClientDoesNotRetryMutations(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{
+		APIToken: "test-token", APIVersion: "2026-07", APIURL: server.URL,
+		HTTPTimeout: time.Second, MaxResponseBytes: 1024, MaxRetries: 3,
+	})
+	if err := client.Do(context.Background(), "mutation CreateItem { create_item { id } }", nil, nil); err == nil {
+		t.Fatal("Do() error = nil, want rate-limit error")
+	}
+	if attempts != 1 {
+		t.Fatalf("mutation attempts = %d, want exactly 1", attempts)
+	}
+}
+
+func TestClientCircuitBreakerOpensAfterRepeatedTemporaryFailures(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{
+		APIToken: "test-token", APIVersion: "2026-07", APIURL: server.URL,
+		HTTPTimeout: time.Second, MaxResponseBytes: 1024, MaxRetries: 0,
+	})
+	for index := 0; index < 5; index++ {
+		if err := client.Do(context.Background(), "query { boards { id } }", nil, nil); err == nil {
+			t.Fatalf("call %d error = nil, want upstream failure", index+1)
+		}
+	}
+	if attempts != 5 {
+		t.Fatalf("upstream attempts = %d, want 5", attempts)
+	}
+	err := client.Do(context.Background(), "query { boards { id } }", nil, nil)
+	if !errors.Is(err, ErrCircuitOpen) {
+		t.Fatalf("sixth call error = %v, want ErrCircuitOpen", err)
+	}
+	if attempts != 5 {
+		t.Fatalf("circuit-open call reached upstream: attempts = %d", attempts)
 	}
 }

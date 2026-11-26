@@ -4,6 +4,50 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — Hardening, performance and operability
+
+### Added
+
+- **Compact discovery and operational metrics:** new `search_tools` and
+  `get_operational_metrics` tools. Metrics are aggregate latency, error, and rate-limit counters
+  only; arguments, content, tokens, and raw error messages are never stored.
+- **Role-oriented discovery profiles:** `MCP_TOOL_PROFILE=full|read_only|developer|devops|project_manager`
+  narrows the visible catalog while `MCP_ACCESS_LEVEL`, workspace scope, and
+  write allowlists remain the enforcement boundary.
+- **HTTP hardening controls:** bounded request bodies, per-client rate limits,
+  optional TLS enforcement, cached bearer validation, security headers, and
+  complete HTTP server timeouts for the Streamable HTTP transport.
+- **Bounded bulk concurrency:** independent rows inside bulk mutations run
+  through `MCP_BULK_MAX_CONCURRENCY` (default 4, maximum 10) while preserving
+  stable row order and all-or-nothing validation.
+
+### Changed
+
+- **Mutation retry safety:** monday GraphQL mutations are no longer retried
+  automatically because a lost response can duplicate creates or repeat
+  irreversible operations. Reads keep bounded retries with `Retry-After`,
+  exponential backoff, and jitter.
+- **Resilience:** repeated temporary upstream failures open a per-credential
+  circuit breaker keyed by a SHA-256 fingerprint, never by the raw token.
+- **Reproducible builds:** committed `go.mod` now contains the complete module
+  graph, Docker builds use `-mod=readonly` instead of mutating dependencies
+  with `go mod tidy`, builder/runtime base images are pinned by digest, and
+  `.gitattributes` keeps text files LF-terminated on Windows checkouts so
+  Docker bind-mounted validation behaves like CI.
+- **Supply-chain validation:** GitHub Actions are pinned by commit SHA, CI
+  gains govulncheck, Trivy image scanning, and CodeQL, and release images
+  include SBOM/provenance attestations.
+- **Patched toolchain:** the module and Docker builders move to Go 1.27
+  (1.27.4 in the pinned builder digest) because govulncheck/Trivy reported
+  reachable high-severity `net/http`, `crypto/tls`, and `crypto/x509` standard
+  library vulnerabilities in the previous Go 1.25 runtime.
+
+### Contract note
+
+The stable tool schema digest changes intentionally because the additive
+`search_tools` and `get_operational_metrics` tools expand the catalog.
+Existing tool schemas are unchanged.
+
 ## [1.0.0] — Stable contract
 
 ### Changed

@@ -14,9 +14,10 @@ The process exits at startup with `ERROR invalid configuration error="…"`:
 | `MONDAY_API_TOKEN_ENV=X but that environment variable is empty` | The profile points to a token variable that is not set in the container environment. |
 | `MONDAY_WORKSPACE_ID must be a single numeric workspace ID (names are not unique in monday)` | Use the ID, not the name: `list_workspaces` shows it (e.g. `14216815`). |
 | `MCP_ACCESS_LEVEL must be read, write, or full` | Fix the value; the default is `write`. |
+| `MCP_TOOL_PROFILE must be full, read_only, developer, devops, or project_manager` | Fix the profile value. Profiles narrow discovery only; use `MCP_ACCESS_LEVEL` and write allowlists for enforcement. |
 | `MCP_SERVER_INSTRUCTIONS must be at most 4000 characters` | Shorten the override, or unset it to use the built-in instructions. |
 | `MCP_WRITE_TOOL_ALLOWLIST contains unknown tool` | Correct the exact tool name; `list_tool_catalog` shows registered names, but the server must start with an empty allowlist before that tool can be queried. |
-| `MCP_READ_ONLY=true contradicts MCP_ACCESS_LEVEL=…` | `MCP_READ_ONLY` is a deprecated alias; remove it and keep `MCP_ACCESS_LEVEL`. |
+| `MCP_READ_ONLY was removed; use MCP_ACCESS_LEVEL=read, write, or full` | Remove the old variable and keep only `MCP_ACCESS_LEVEL`. |
 | `MCP_PROFILE must be a lowercase name …` / unknown key in a profile | Profile names are `a-z0-9-_`; profile files accept only the keys listed in [CAPABILITIES.md](CAPABILITIES.md#profiles) and never the token itself. |
 | `MONDAY_API_URL must be a valid HTTPS URL` | Only HTTPS endpoints are accepted. |
 | `MCP_MAX_RETRIES must be between 0 and 5`, `MCP_REPORT_MAX_ITEMS must be between 1 and 5000`, … | Bring the value into the stated range. |
@@ -38,6 +39,10 @@ The process exits at startup with `ERROR invalid configuration error="…"`:
 | `get me: monday API returned HTTP 401: Unauthorized` | The token is invalid or revoked. Create a new one in monday (avatar → Developers → My access tokens) and update `.env`. |
 | Actions in monday appear as another person | A personal token always acts as its owner. `get_me` shows who that is; use your own token for your own attribution. Already-created objects keep their original author. |
 | `USER_UNAUTHORIZED` / permission errors on some boards | The token's user lacks access to that board or workspace (member vs. admin, private boards). Share the board with the user or use a token that has access. |
+| HTTP `401 unauthorized` before `initialize` or `tools/list` | In `MCP_AUTH_MODE=request` the bearer token is missing, malformed, has a disallowed prefix, or failed monday validation. Check `MCP_HTTP_VALIDATE_TOKEN` and the token itself. |
+| HTTP `503 token_validation_unavailable` | monday could not be reached to validate the bearer token. This is not proof that the token is bad; retry after monday/network recovery. |
+| HTTP `426 tls_required` | `MCP_HTTP_REQUIRE_TLS=true` and the request is plaintext outside loopback. Terminate TLS or configure the trusted proxy to overwrite `X-Forwarded-Proto: https`. |
+| HTTP `429 rate_limit_exceeded` | The per-client HTTP budget (`MCP_HTTP_RATE_LIMIT_RPM`, default 120/minute) is exhausted. Wait for the next minute window or raise the limit deliberately. |
 
 ## Refused by the server's own policy
 
@@ -104,7 +109,8 @@ not restricted.
 
 | Symptom | Cause and fix |
 |---|---|
-| `monday graphql request failed [ComplexityException]` / `[COMPLEXITY_BUDGET_EXHAUSTED]` after retries | monday's per-minute complexity budget is spent. The server already retried (bounded by `MCP_MAX_RETRIES`, honoring `retry_in_seconds`). Wait for the reset shown by `get_api_status`, or request smaller pages (`limit`). |
+| `monday graphql request failed [ComplexityException]` / `[COMPLEXITY_BUDGET_EXHAUSTED]` after retries | monday's per-minute complexity budget is spent. Reads are retried (bounded by `MCP_MAX_RETRIES`, honoring `retry_in_seconds`); mutations are deliberately not retried. Wait for the reset shown by `get_api_status`, or request smaller pages (`limit`). |
+| `monday circuit breaker is open` | Repeated temporary monday/network failures were observed for the same credential fingerprint. Wait about 30 seconds, inspect connectivity and `get_api_status`, and do not retry mutations until you reconcile whether the original write was applied. |
 | `monday response exceeded configured limit` | The response was larger than `MCP_MAX_RESPONSE_BYTES` (4 MiB). Use smaller `limit`s or narrower queries; raise the limit only if you must. |
 | A report says `truncated: true` | The board has more items than `MCP_REPORT_MAX_ITEMS` (default 500); raise it (≤ 5000) or pass `max_items`. |
 | Timeouts | Raise `MCP_HTTP_TIMEOUT` (default `15s`) for slow networks. |

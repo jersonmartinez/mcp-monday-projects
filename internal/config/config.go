@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,19 @@ type Config struct {
 	HTTPTimeout          time.Duration
 	MaxResponseBytes     int64
 	MaxRetries           int
+	// ToolProfile narrows the registered catalog for an operator role.
+	// Empty/full preserves the complete access-level catalog.
+	ToolProfile string
+	// MaxRequestBytes bounds one Streamable HTTP request body.
+	MaxRequestBytes int64
+	// HTTPRateLimitRPM is the per-client Streamable HTTP request budget.
+	HTTPRateLimitRPM int
+	// RequireTLS rejects plaintext non-loopback HTTP requests when true.
+	RequireTLS bool
+	// ValidateBearer enables cached monday validation of request bearer tokens.
+	ValidateBearer bool
+	// BulkMaxConcurrency bounds independent mutations inside one bulk tool.
+	BulkMaxConcurrency int
 	// AccessLevel is read, write (default), or full. It decides which tools
 	// are registered: read hides every mutation, write exposes create/update/
 	// archive, and full also exposes permanent deletes.
@@ -99,8 +113,8 @@ func (env source) config() (Config, error) {
 		return Config{}, err
 	}
 	path := env.valueOrDefault("MCP_HTTP_PATH", "/mcp")
-	if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, "?#") {
-		return Config{}, fmt.Errorf("MCP_HTTP_PATH must be an absolute path without query or fragment")
+	if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, "?# \t\r\n") {
+		return Config{}, fmt.Errorf("MCP_HTTP_PATH must be an absolute path without query, fragment, or whitespace")
 	}
 	prefixes := env.parseTokenPrefixes()
 
@@ -109,18 +123,49 @@ func (env source) config() (Config, error) {
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return Config{}, fmt.Errorf("MONDAY_API_URL must be a valid HTTPS URL")
 	}
+	apiVersion := env.valueOrDefault("MONDAY_API_VERSION", defaultAPIVersion)
+	if !apiVersionFormat.MatchString(apiVersion) {
+		return Config{}, fmt.Errorf("MONDAY_API_VERSION must use monday's YYYY-MM format")
+	}
 
 	timeout, err := env.parseDuration("MCP_HTTP_TIMEOUT", 15*time.Second)
 	if err != nil {
 		return Config{}, err
 	}
+	if timeout > 120*time.Second {
+		return Config{}, fmt.Errorf("MCP_HTTP_TIMEOUT must be at most 120s")
+	}
 	maxResponseBytes, err := env.parseInt64("MCP_MAX_RESPONSE_BYTES", 4*1024*1024)
-	if err != nil || maxResponseBytes < 1024 {
-		return Config{}, fmt.Errorf("MCP_MAX_RESPONSE_BYTES must be at least 1024 bytes")
+	if err != nil || maxResponseBytes < 1024 || maxResponseBytes > 64*1024*1024 {
+		return Config{}, fmt.Errorf("MCP_MAX_RESPONSE_BYTES must be between 1024 bytes and 64 MiB")
 	}
 	retries, err := env.parseInt64("MCP_MAX_RETRIES", 2)
 	if err != nil || retries < 0 || retries > 5 {
 		return Config{}, fmt.Errorf("MCP_MAX_RETRIES must be between 0 and 5")
+	}
+	maxRequestBytes, err := env.parseInt64("MCP_MAX_REQUEST_BYTES", 10*1024*1024)
+	if err != nil || maxRequestBytes < 1024 || maxRequestBytes > 128*1024*1024 {
+		return Config{}, fmt.Errorf("MCP_MAX_REQUEST_BYTES must be between 1024 bytes and 128 MiB")
+	}
+	rateLimitRPM, err := env.parseInt64("MCP_HTTP_RATE_LIMIT_RPM", 120)
+	if err != nil || rateLimitRPM < 0 || rateLimitRPM > 10000 {
+		return Config{}, fmt.Errorf("MCP_HTTP_RATE_LIMIT_RPM must be between 0 and 10000")
+	}
+	requireTLS, err := env.parseBool("MCP_HTTP_REQUIRE_TLS", false)
+	if err != nil {
+		return Config{}, err
+	}
+	validateBearer, err := env.parseBool("MCP_HTTP_VALIDATE_TOKEN", true)
+	if err != nil {
+		return Config{}, err
+	}
+	bulkConcurrency, err := env.parseInt64("MCP_BULK_MAX_CONCURRENCY", 4)
+	if err != nil || bulkConcurrency < 1 || bulkConcurrency > 10 {
+		return Config{}, fmt.Errorf("MCP_BULK_MAX_CONCURRENCY must be between 1 and 10")
+	}
+	toolProfile, err := env.parseToolProfile()
+	if err != nil {
+		return Config{}, err
 	}
 
 	level, err := env.parseAccessLevel()
@@ -176,6 +221,12 @@ func (env source) config() (Config, error) {
 		HTTPTimeout:             timeout,
 		MaxResponseBytes:        maxResponseBytes,
 		MaxRetries:              int(retries),
+		ToolProfile:             toolProfile,
+		MaxRequestBytes:         maxRequestBytes,
+		HTTPRateLimitRPM:        int(rateLimitRPM),
+		RequireTLS:              requireTLS,
+		ValidateBearer:          validateBearer,
+		BulkMaxConcurrency:      int(bulkConcurrency),
 		AccessLevel:             level,
 		ReadOnly:                level == AccessRead,
 		ServerInstructions:      serverInstructions,
@@ -194,7 +245,31 @@ const (
 	AccessFull  = "full"
 )
 
+// Tool profiles accepted by MCP_TOOL_PROFILE. They narrow discovery only;
+// MCP_ACCESS_LEVEL and the write allowlists remain the security boundary.
+const (
+	ToolProfileFull           = "full"
+	ToolProfileReadOnly       = "read_only"
+	ToolProfileDeveloper      = "developer"
+	ToolProfileDevOps         = "devops"
+	ToolProfileProjectManager = "project_manager"
+)
+
+var apiVersionFormat = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}$`)
+
 const maxServerInstructions = 4000
+
+func (env source) parseToolProfile() (string, error) {
+	raw := strings.ToLower(strings.TrimSpace(env.get("MCP_TOOL_PROFILE")))
+	switch raw {
+	case "", ToolProfileFull:
+		return ToolProfileFull, nil
+	case ToolProfileReadOnly, ToolProfileDeveloper, ToolProfileDevOps, ToolProfileProjectManager:
+		return raw, nil
+	default:
+		return "", fmt.Errorf("MCP_TOOL_PROFILE must be full, read_only, developer, devops, or project_manager")
+	}
+}
 
 // parseAccessLevel reads the stable MCP_ACCESS_LEVEL contract.
 // MCP_READ_ONLY was removed before v1.0.0; keeping one source of truth avoids

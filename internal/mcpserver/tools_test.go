@@ -15,6 +15,8 @@ func TestEveryToolIsCallable(t *testing.T) {
 	cases := map[string]map[string]any{
 		"server_info":              nil,
 		"list_tool_catalog":        {"category": "bulk"},
+		"search_tools":             {"query": "item", "limit": 3},
+		"get_operational_metrics":  {},
 		"get_me":                   nil,
 		"get_api_status":           nil,
 		"list_items_all":           {"board_id": "100"},

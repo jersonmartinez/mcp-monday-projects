@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/domain"
 	"github.com/jersonmartinez/mcp-monday-projects/internal/monday"
@@ -447,17 +448,22 @@ func (s *Service) BulkUpdateItems(ctx context.Context, boardID string, updates [
 		}
 		return result, nil
 	}
-	for index := range result.Rows {
+	var mu sync.Mutex
+	runBounded(ctx, s.bulkMaxConcurrency, len(result.Rows), func(ctx context.Context, index int) {
 		row := &result.Rows[index]
 		if _, err := s.port.UpdateItemValues(ctx, boardID, row.ItemID, row.Normalized); err != nil {
 			row.Status, row.Error = "failed", err.Error()
+			mu.Lock()
 			result.Failed++
-			continue
+			mu.Unlock()
+			return
 		}
 		row.Status = "updated"
 		row.Warnings = s.persistedWarnings(ctx, row.ItemID, row.Normalized)
+		mu.Lock()
 		result.Succeeded++
-	}
+		mu.Unlock()
+	})
 	return result, nil
 }
 
@@ -510,11 +516,14 @@ func (s *Service) BulkItemAction(ctx context.Context, action string, itemIDs []s
 		result.Failed = countStatus(result.Rows, "invalid")
 		return result, nil
 	}
-	for index := range result.Rows {
+	var mu sync.Mutex
+	runBounded(ctx, s.bulkMaxConcurrency, len(result.Rows), func(ctx context.Context, index int) {
 		row := &result.Rows[index]
 		if row.Status != "planned" {
+			mu.Lock()
 			result.Failed++
-			continue
+			mu.Unlock()
+			return
 		}
 		var err error
 		if action == "move" {
@@ -524,11 +533,15 @@ func (s *Service) BulkItemAction(ctx context.Context, action string, itemIDs []s
 		}
 		if err != nil {
 			row.Status, row.Error = "failed", err.Error()
+			mu.Lock()
 			result.Failed++
-			continue
+			mu.Unlock()
+			return
 		}
 		row.Status = map[string]string{"move": "moved", "archive": "archived"}[action]
+		mu.Lock()
 		result.Succeeded++
-	}
+		mu.Unlock()
+	})
 	return result, nil
 }

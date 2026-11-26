@@ -1,0 +1,5 @@
+# This repository is validated inside Linux containers, often through a bind
+# mount of a Windows checkout. Keep every text file LF-terminated so shell
+# scripts, Go formatting, YAML lint, Dockerfiles, and env examples behave the
+# same on Windows, macOS, Linux, and CI.
+* text=auto eol=lf

@@ -25,6 +25,7 @@ type ServerInfoOutput struct {
 	APIVersion   string         `json:"api_version"`
 	AccessLevel  string         `json:"access_level"`
 	Profile      string         `json:"profile,omitempty"`
+	ToolProfile  string         `json:"tool_profile"`
 	ToolCount    int            `json:"tool_count"`
 	HiddenTools  int            `json:"hidden_write_tools"`
 	WritePolicy  map[string]any `json:"write_policy"`
@@ -59,6 +60,8 @@ type Options struct {
 	// WriteToolAllowlist restricts registered non-read tools by exact name.
 	WriteToolAllowlist []string
 	ReportMaxItems     int
+	// ToolProfile narrows the discovery surface for an operator role.
+	ToolProfile string
 }
 
 // level resolves the effective access level.
@@ -111,11 +114,11 @@ func New(cfg config.Config) (*mcp.Server, error) {
 	guard := application.NewWriteGuard(cfg.ReadOnly, cfg.WriteBoardAllowlist, cfg.WriteWorkspaceAllowlist)
 	svc := application.NewService(client, application.Options{
 		Guard: guard, ReportMaxItems: cfg.ReportMaxItems, WorkspaceScope: cfg.WorkspaceID,
-		AllowDelete: cfg.AccessLevel == config.AccessFull,
+		AllowDelete: cfg.AccessLevel == config.AccessFull, BulkMaxConcurrency: cfg.BulkMaxConcurrency,
 	})
 	server, _, err := NewWithService(svc, Options{
 		APIVersion: cfg.APIVersion, Profile: cfg.Profile, AccessLevel: cfg.AccessLevel, ReadOnly: cfg.ReadOnly,
-		ServerInstructions: cfg.ServerInstructions, WriteToolAllowlist: cfg.WriteToolAllowlist, ReportMaxItems: cfg.ReportMaxItems,
+		ServerInstructions: cfg.ServerInstructions, WriteToolAllowlist: cfg.WriteToolAllowlist, ReportMaxItems: cfg.ReportMaxItems, ToolProfile: cfg.ToolProfile,
 	})
 	return server, err
 }
@@ -130,14 +133,18 @@ func NewWithService(svc *application.Service, options Options) (*mcp.Server, []T
 	for _, name := range options.WriteToolAllowlist {
 		allowlist[name] = true
 	}
-	r := &registry{server: server, svc: svc, readOnly: level == config.AccessRead, full: level == config.AccessFull, writeToolAllowlist: allowlist}
+	toolProfile := options.ToolProfile
+	if toolProfile == "" {
+		toolProfile = config.ToolProfileFull
+	}
+	r := &registry{server: server, svc: svc, readOnly: level == config.AccessRead, full: level == config.AccessFull, writeToolAllowlist: allowlist, toolProfile: toolProfile, metrics: newToolMetrics()}
 
 	add(r, ToolSpec{Name: "server_info", Category: CatDiagnostics, Title: "Server info", ReadOnly: true,
 		Description: "Return safe server metadata: version, runtime, API version, tool count, the active profile (MCP_PROFILE), the access level (MCP_ACCESS_LEVEL), the effective write policy (allowlists), and the workspace scope (MONDAY_WORKSPACE_ID) with its resolved name."},
 		func(ctx context.Context, _ ServerInfoInput) (ServerInfoOutput, error) {
 			out := ServerInfoOutput{
 				Name: "mcp-monday-projects", Version: Version, Runtime: runtime.Version(), APIVersion: options.APIVersion, AccessLevel: level, Profile: options.Profile,
-				ToolCount: len(r.specs), HiddenTools: len(r.skipped), WritePolicy: svc.Guard().Describe(), ReportBudget: options.ReportMaxItems,
+				ToolProfile: toolProfile, ToolCount: len(r.specs), HiddenTools: len(r.skipped), WritePolicy: svc.Guard().Describe(), ReportBudget: options.ReportMaxItems,
 			}
 			if scope := svc.WorkspaceScope(); scope != "" {
 				out.WorkspaceScope = &WorkspaceScope{ID: scope}
@@ -159,6 +166,16 @@ func NewWithService(svc *application.Service, options Options) (*mcp.Server, []T
 				}
 			}
 			return CatalogOutput{Tools: tools, Count: len(tools), Categories: CategoryOrder}, nil
+		})
+	add(r, ToolSpec{Name: "search_tools", Category: CatDiagnostics, Title: "Search tools", ReadOnly: true,
+		Description: "Search the registered catalog by keyword and return compact capability metadata without large input/output schemas."},
+		func(_ context.Context, in ToolSearchInput) (ToolSearchOutput, error) {
+			return searchToolSpecs(r.Catalog(), in.Query, in.Limit), nil
+		})
+	add(r, ToolSpec{Name: "get_operational_metrics", Category: CatDiagnostics, Title: "Operational metrics", ReadOnly: true,
+		Description: "Return privacy-safe aggregate tool latency, error, and rate-limit counters. Arguments, content, tokens, and error messages are never stored."},
+		func(_ context.Context, in OperationalMetricsInput) (OperationalMetricsOutput, error) {
+			return r.metrics.snapshot(in.Tool), nil
 		})
 	add(r, ToolSpec{Name: "get_me", Category: CatDiagnostics, Title: "Authenticated user", ReadOnly: true,
 		Description: "Return the user and account behind the configured token (connectivity check). Never returns the token."},

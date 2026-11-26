@@ -23,7 +23,7 @@ and an actionable message; the token and raw API payloads are never echoed.
 
 <!-- tools:begin -->
 
-_103 tools, generated from `list_tool_catalog`._
+_105 tools, generated from `list_tool_catalog`._
 
 ### Diagnostics
 
@@ -31,8 +31,10 @@ _103 tools, generated from `list_tool_catalog`._
 |---|---|---|---|
 | `get_api_status` | read | `account.read` | Return monday's remaining per-minute complexity budget, reset time, and the API version that served the request. |
 | `get_me` | read | `account.read` | Return the user and account behind the configured token (connectivity check). Never returns the token. |
+| `get_operational_metrics` | read | `account.read` | Return privacy-safe aggregate tool latency, error, and rate-limit counters. Arguments, content, tokens, and error messages are never stored. |
 | `list_tool_catalog` | read | `account.read` | List every registered tool with its category, read-only/destructive hints, and required capability. Optionally filter by category. |
 | `quality_diagnostics` | read | `account.read` | Inspect the effective catalog for missing metadata and report read/write/destructive counts without exposing secrets. |
+| `search_tools` | read | `account.read` | Search the registered catalog by keyword and return compact capability metadata without large input/output schemas. |
 | `server_info` | read | `account.read` | Return safe server metadata: version, runtime, API version, tool count, the active profile (MCP_PROFILE), the access level (MCP_ACCESS_LEVEL), the effective write policy (allowlists), and the workspace scope (MONDAY_WORKSPACE_ID) with its resolved name. |
 
 ### Workspaces and folders

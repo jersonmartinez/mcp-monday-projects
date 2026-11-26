@@ -20,7 +20,7 @@ func writeProfile(t *testing.T, name, body string) string {
 
 func clearPolicyEnv(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"MCP_ACCESS_LEVEL", "MONDAY_WORKSPACE_ID", "MONDAY_WRITE_BOARD_ALLOWLIST", "MONDAY_WRITE_WORKSPACE_ALLOWLIST", "MCP_REPORT_MAX_ITEMS"} {
+	for _, name := range []string{"MCP_ACCESS_LEVEL", "MCP_TOOL_PROFILE", "MCP_BULK_MAX_CONCURRENCY", "MONDAY_WORKSPACE_ID", "MONDAY_WRITE_BOARD_ALLOWLIST", "MONDAY_WRITE_WORKSPACE_ALLOWLIST", "MCP_REPORT_MAX_ITEMS"} {
 		t.Setenv(name, "")
 	}
 }
@@ -35,6 +35,8 @@ func TestProfileSetsTargetAndWinsOverEnvironment(t *testing.T) {
 MONDAY_API_TOKEN_ENV=MONDAY_TOKEN_DEVOPS
 MONDAY_WORKSPACE_ID=14216815
 MCP_ACCESS_LEVEL="read"
+MCP_TOOL_PROFILE=project_manager
+MCP_BULK_MAX_CONCURRENCY=2
 export MONDAY_WRITE_BOARD_ALLOWLIST=1,2
 `)
 	cfg, err := Load()
@@ -44,8 +46,8 @@ export MONDAY_WRITE_BOARD_ALLOWLIST=1,2
 	if cfg.Profile != "devops" || cfg.APIToken != "devops-token" || cfg.WorkspaceID != "14216815" || cfg.AccessLevel != AccessRead || !cfg.ReadOnly {
 		t.Fatalf("cfg = %+v", cfg)
 	}
-	if len(cfg.WriteBoardAllowlist) != 2 || cfg.ReportMaxItems != 250 {
-		t.Fatalf("allowlist/report = %v / %d (unset keys must fall back to the environment)", cfg.WriteBoardAllowlist, cfg.ReportMaxItems)
+	if len(cfg.WriteBoardAllowlist) != 2 || cfg.ReportMaxItems != 250 || cfg.ToolProfile != ToolProfileProjectManager || cfg.BulkMaxConcurrency != 2 {
+		t.Fatalf("allowlist/report/profile = %v / %d / %s (unset keys must fall back to the environment)", cfg.WriteBoardAllowlist, cfg.ReportMaxItems, cfg.ToolProfile)
 	}
 }
 
