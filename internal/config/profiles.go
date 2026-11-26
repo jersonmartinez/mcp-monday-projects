@@ -31,7 +31,7 @@ var profileKeys = map[string]bool{
 	"MCP_ACCESS_LEVEL": true, "MCP_SERVER_INSTRUCTIONS": true, "MCP_WRITE_TOOL_ALLOWLIST": true, "MONDAY_WORKSPACE_ID": true,
 	"MONDAY_WRITE_BOARD_ALLOWLIST": true, "MONDAY_WRITE_WORKSPACE_ALLOWLIST": true,
 	"MCP_REPORT_MAX_ITEMS": true, "MCP_HTTP_TIMEOUT": true, "MCP_MAX_RESPONSE_BYTES": true,
-	"MCP_MAX_RETRIES": true, "MCP_LOG_LEVEL": true,
+	"MCP_MAX_RETRIES": true, "MCP_LOG_LEVEL": true, "MCP_TOOL_PROFILE": true, "MCP_BULK_MAX_CONCURRENCY": true,
 }
 
 // source resolves a variable: profile value first, then the environment.

@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/config"
 	mcpserver "github.com/jersonmartinez/mcp-monday-projects/internal/mcpserver"
+	"github.com/jersonmartinez/mcp-monday-projects/internal/monday"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -38,6 +40,14 @@ func main() {
 		return
 	}
 
+	var tokenValidator func(context.Context, string) error
+	if cfg.AuthMode == "request" && cfg.ValidateBearer {
+		validationClient := monday.NewClient(cfg)
+		tokenValidator = func(ctx context.Context, token string) error {
+			_, err := validationClient.Me(monday.WithRequestToken(ctx, token))
+			return err
+		}
+	}
 	address := fmt.Sprintf("%s:%d", cfg.HTTPHost, cfg.HTTPPort)
 	httpServer := &http.Server{
 		Addr: address,
@@ -46,8 +56,16 @@ func main() {
 			AllowSharedToken:     cfg.AllowSharedToken,
 			ClientKey:            cfg.ClientKey,
 			AllowedTokenPrefixes: cfg.AllowedTokenPrefixes,
+			MaxRequestBytes:      cfg.MaxRequestBytes,
+			RateLimitRPM:         cfg.HTTPRateLimitRPM,
+			RequireTLS:           cfg.RequireTLS,
+			ValidateBearer:       cfg.ValidateBearer,
+			TokenValidator:       tokenValidator,
 		}),
 		ReadHeaderTimeout: cfg.HTTPTimeout,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
 	}
 	logger.Info("starting streamable HTTP transport", "address", address, "path", cfg.HTTPPath)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

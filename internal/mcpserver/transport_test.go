@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	mcpserver "github.com/jersonmartinez/mcp-monday-projects/internal/mcpserver"
+	"github.com/jersonmartinez/mcp-monday-projects/internal/monday"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -121,6 +123,108 @@ func TestHTTPHandlerRequestBearerInitializes(t *testing.T) {
 	result, err := session.ListTools(context.Background(), nil)
 	if err != nil || len(result.Tools) != 1 {
 		t.Fatalf("ListTools() result=%+v error=%v", result, err)
+	}
+}
+
+func TestHTTPHandlerRateLimitsPerBearerToken(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	handler := mcpserver.NewHTTPHandler(server, "/mcp", mcpserver.HTTPAuthOptions{
+		Mode: "request", RateLimitRPM: 1,
+	})
+	for index, want := range []int{http.StatusBadRequest, http.StatusTooManyRequests} {
+		request := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		request.Header.Set("Authorization", "Bearer monday_user")
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if index == 0 && recorder.Code == http.StatusTooManyRequests {
+			t.Fatalf("first request unexpectedly rate limited: %d", recorder.Code)
+		}
+		if index == 1 && recorder.Code != want {
+			t.Fatalf("second request status=%d, want %d", recorder.Code, want)
+		}
+	}
+}
+
+func TestHTTPHandlerRejectsOversizedDeclaredBody(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	handler := mcpserver.NewHTTPHandler(server, "/mcp", mcpserver.HTTPAuthOptions{
+		Mode: "request", MaxRequestBytes: 8,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("0123456789"))
+	request.Header.Set("Authorization", "Bearer monday_user")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status=%d, want %d", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestHTTPHandlerRequireTLS(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	handler := mcpserver.NewHTTPHandler(server, "/mcp", mcpserver.HTTPAuthOptions{
+		Mode: "request", RequireTLS: true,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	request.Header.Set("Authorization", "Bearer monday_user")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUpgradeRequired {
+		t.Fatalf("plaintext status=%d, want %d", recorder.Code, http.StatusUpgradeRequired)
+	}
+
+	proxied := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	proxied.Header.Set("Authorization", "Bearer monday_user")
+	proxied.Header.Set("X-Forwarded-Proto", "https")
+	proxiedRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(proxiedRecorder, proxied)
+	if proxiedRecorder.Code == http.StatusUpgradeRequired {
+		t.Fatal("forwarded HTTPS request was rejected")
+	}
+}
+
+func TestHTTPHandlerBearerValidationIsCached(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	validations := 0
+	handler := mcpserver.NewHTTPHandler(server, "/mcp", mcpserver.HTTPAuthOptions{
+		Mode: "request", ValidateBearer: true,
+		TokenValidator: func(_ context.Context, token string) error {
+			validations++
+			if token == "bad" {
+				return context.DeadlineExceeded
+			}
+			if token == "circuit" {
+				return monday.ErrCircuitOpen
+			}
+			return nil
+		},
+	})
+	for index := 0; index < 2; index++ {
+		request := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		request.Header.Set("Authorization", "Bearer good")
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if recorder.Code == http.StatusUnauthorized || recorder.Code == http.StatusServiceUnavailable {
+			t.Fatalf("valid bearer rejected with %d", recorder.Code)
+		}
+	}
+	if validations != 1 {
+		t.Fatalf("validations=%d, want cached single validation", validations)
+	}
+
+	bad := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	bad.Header.Set("Authorization", "Bearer bad")
+	badRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(badRecorder, bad)
+	if badRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid bearer status=%d, want 401", badRecorder.Code)
+	}
+
+	circuit := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	circuit.Header.Set("Authorization", "Bearer circuit")
+	circuitRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(circuitRecorder, circuit)
+	if circuitRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("circuit-open bearer validation status=%d, want 503", circuitRecorder.Code)
 	}
 }
 

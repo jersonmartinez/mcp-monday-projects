@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/domain"
@@ -465,8 +466,10 @@ func (s *Service) BulkCreateUpdates(ctx context.Context, updates map[string]stri
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	out := BulkUpdatesResult{Planned: len(ids), Rows: make([]UpdateOutcome, 0, len(ids))}
-	for _, id := range ids {
+	out := BulkUpdatesResult{Planned: len(ids), Rows: make([]UpdateOutcome, len(ids))}
+	var mu sync.Mutex
+	runBounded(ctx, s.bulkMaxConcurrency, len(ids), func(ctx context.Context, index int) {
+		id := ids[index]
 		body := updates[id]
 		if body == "" {
 			body = common
@@ -488,13 +491,15 @@ func (s *Service) BulkCreateUpdates(ctx context.Context, updates map[string]stri
 				row.Update = u
 			}
 		}
+		out.Rows[index] = row
+		mu.Lock()
 		if row.Status == "failed" {
 			out.Failed++
 		} else if row.Status == "created" {
 			out.Succeeded++
 		}
-		out.Rows = append(out.Rows, row)
-	}
+		mu.Unlock()
+	})
 	return out, nil
 }
 

@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/jersonmartinez/mcp-monday-projects/internal/application"
+	"github.com/jersonmartinez/mcp-monday-projects/internal/config"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -51,6 +54,8 @@ type registry struct {
 	skipped            []ToolSpec
 	known              map[string]ToolSpec
 	writeToolAllowlist map[string]bool
+	toolProfile        string
+	metrics            *toolMetrics
 }
 
 func boolPtr(value bool) *bool { return &value }
@@ -68,7 +73,8 @@ func add[In, Out any](r *registry, spec ToolSpec, fn func(context.Context, In) (
 	r.known[spec.Name] = spec
 	if (!spec.ReadOnly && r.readOnly) ||
 		(!spec.ReadOnly && len(r.writeToolAllowlist) > 0 && !r.writeToolAllowlist[spec.Name]) ||
-		(spec.Permanent && !r.full) {
+		(spec.Permanent && !r.full) ||
+		!toolProfileAllows(r.toolProfile, spec) {
 		r.skipped = append(r.skipped, spec)
 		return
 	}
@@ -84,7 +90,9 @@ func add[In, Out any](r *registry, spec ToolSpec, fn func(context.Context, In) (
 	}
 	mcp.AddTool(r.server, &mcp.Tool{Name: spec.Name, Title: spec.Title, Description: spec.Description, Annotations: annotations},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input In) (*mcp.CallToolResult, Out, error) {
+			started := time.Now()
 			output, err := fn(ctx, input)
+			r.metrics.record(spec.Name, time.Since(started), err)
 			if err != nil {
 				var zero Out
 				return nil, zero, err
@@ -107,6 +115,47 @@ func defaultCapability(spec ToolSpec) string {
 		return "account.read"
 	}
 	return spec.Category + suffix
+}
+
+// toolProfileAllows narrows the discovery surface for a role. It is deliberately
+// capability-based rather than a second authorization system: access level,
+// workspace scope, and the write allowlists remain the enforcement boundary.
+func toolProfileAllows(profile string, spec ToolSpec) bool {
+	if profile == "" || profile == config.ToolProfileFull {
+		return true
+	}
+	if spec.Permanent {
+		return false
+	}
+	if profile == config.ToolProfileReadOnly {
+		return spec.ReadOnly
+	}
+	if spec.ReadOnly {
+		return true
+	}
+	writeCaps := map[string]map[string]bool{
+		config.ToolProfileDeveloper: {
+			"items.write": true, "collaboration.write": true, "tags.write": true,
+		},
+		config.ToolProfileProjectManager: {
+			"boards.write": true, "groups.write": true, "columns.write": true, "items.write": true,
+			"collaboration.write": true, "tags.write": true,
+		},
+		config.ToolProfileDevOps: {
+			"workspaces.write": true, "boards.write": true, "groups.write": true, "columns.write": true,
+			"items.write": true, "collaboration.write": true, "tags.write": true,
+		},
+	}
+	allowed, ok := writeCaps[profile]
+	if !ok {
+		return true
+	}
+	for capability := range allowed {
+		if spec.Capability == capability || strings.HasPrefix(spec.Capability, capability+".") {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *registry) validateWriteToolAllowlist() error {

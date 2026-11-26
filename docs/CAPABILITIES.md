@@ -32,9 +32,44 @@ error so an old deployment cannot silently select a different policy.
 
 | Level | Tools | Use it for |
 |---|---|---|
-| `read` | 39 read tools: schema, search, reports, diagnostics | Analysts, dashboards, audits |
-| `write` (default) | + 33 write tools: create, update, move, archive, bulk | Day-to-day work; archived objects can be restored from monday at any time |
+| `read` | 58 read tools: schema, search, reports, discovery, diagnostics | Analysts, dashboards, audits |
+| `write` (default) | + 40 write/archive tools: create, update, move, archive, bulk | Day-to-day work; archived objects can be restored from monday at any time |
 | `full` | + 7 permanent deletes (`delete_*`) | Cleanup and maintenance by a trusted operator |
+
+### Tool profiles
+
+`MCP_TOOL_PROFILE` narrows **discovery** for an operator role. It is additive
+filtering only: `MCP_ACCESS_LEVEL`, `MONDAY_WORKSPACE_ID`, and the write
+allowlists remain the security boundary. The default `full` preserves the
+complete access-level catalog.
+
+| Profile | Visible writes | Intended use |
+|---|---|---|
+| `full` | Every write allowed by `MCP_ACCESS_LEVEL`; permanent deletes still require `full` | Trusted operator/automation |
+| `read_only` | None | Analysts, audits, reporting |
+| `developer` | Item, bulk, collaboration, and tag writes | Day-to-day execution on existing boards |
+| `project_manager` | Board/group/column structure, item, bulk, collaboration, and tag writes; no workspace administration | Planning, templates, coordination, reports |
+| `devops` | Workspace, board, group, column, item, bulk, collaboration, and tag writes; no permanent deletes | Provisioning and operational administration |
+
+Read tools remain visible in every non-`read_only` profile so the client can
+inspect schema and confirm context before writing. A write hidden by the
+profile cannot be re-exposed by `MCP_WRITE_TOOL_ALLOWLIST`; the allowlist only
+narrows the already visible non-read catalog.
+
+### Discovery and operational metrics
+
+`search_tools` is the cheap discovery path for large-catalog clients: pass a
+keyword and receive at most 25 compact `ToolSpec` rows (name, category,
+capability, description, and read/destructive hints) without serializing every
+input/output JSON schema.
+
+`get_operational_metrics` returns in-process aggregate counters since server
+start: calls, errors, upstream rate-limit/budget failures, average/max latency,
+and per-minute rates per tool, plus totals and uptime. It is privacy-safe by
+construction — arguments, results, tokens, user content, and raw error messages
+are never stored. The registry is bounded by the registered tool catalog. The
+counters reset when the container restarts and are operational diagnostics, not
+a billing or audit log.
 
 ### Model-facing instructions and write-tool allowlist
 
@@ -78,7 +113,7 @@ docker run --rm -i --env-file .env \
 |---|---|
 | Precedence | Keys set in the profile win over the environment, so a stray variable cannot widen a pinned target; keys the profile omits fall back to the environment and then to defaults. |
 | Tokens | Never in the file: `MONDAY_API_TOKEN` is rejected. `MONDAY_API_TOKEN_ENV=MONDAY_TOKEN_DEVOPS` names the variable that holds this account's token; without it `MONDAY_API_TOKEN` is used. |
-| Allowed keys | `MONDAY_API_TOKEN_ENV`, `MONDAY_WORKSPACE_ID`, `MCP_ACCESS_LEVEL`, `MCP_SERVER_INSTRUCTIONS`, `MCP_WRITE_TOOL_ALLOWLIST`, the two write allowlists, `MCP_REPORT_MAX_ITEMS`, `MONDAY_API_VERSION`, `MONDAY_API_URL`, and the runtime limits. Any other key fails at startup. |
+| Allowed keys | `MONDAY_API_TOKEN_ENV`, `MONDAY_WORKSPACE_ID`, `MCP_ACCESS_LEVEL`, `MCP_TOOL_PROFILE`, `MCP_SERVER_INSTRUCTIONS`, `MCP_WRITE_TOOL_ALLOWLIST`, the two write allowlists, `MCP_REPORT_MAX_ITEMS`, `MCP_BULK_MAX_CONCURRENCY`, `MONDAY_API_VERSION`, `MONDAY_API_URL`, and the runtime limits. Any other key fails at startup. |
 | Location | `MCP_PROFILES_DIR` (default `/profiles` in the image, `profiles` otherwise). Names are lowercase `a-z 0-9 - _`. |
 | Visibility | `server_info.profile` reports the active profile; the token is never returned. |
 

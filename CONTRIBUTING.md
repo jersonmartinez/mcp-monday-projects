@@ -22,7 +22,7 @@ CI and security workflows run on pull requests targeting `main` or an intermedia
 | Workflow | Runs on | What it does |
 |---|---|---|
 | `ci.yaml` | PRs, push to `main` | gofmt, `go mod verify`, tests, coverage gate, `-race`, `go vet`, Docker build |
-| `security.yaml` | PRs, push to `main` | Secret scan (gitleaks) |
+| `security.yaml` | PRs, push to `main` | gitleaks, govulncheck, Trivy image scan, CodeQL |
 | `pr-checks.yaml` | PRs | Conventional Commits PR title, branch name (`scripts/check_branch_name.sh`; Dependabot branches exempt), yamllint, shellcheck, markdownlint and relative doc links (`scripts/check_doc_links.py`) |
 | `labels-sync.yaml` | Push to `main` touching `.github/labels.yaml`; PRs as a dry run | Creates and updates labels from `.github/labels.yaml`. It never deletes a label |
 | `docs-wiki-sync.yaml` | Push to `main` touching `docs/` | Rebuilds the [Wiki](https://github.com/jersonmartinez/mcp-monday-projects/wiki) from `docs/` (`scripts/wiki_pages.py`) |

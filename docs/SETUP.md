@@ -78,14 +78,33 @@ mcpServers:
         sensitive: true
 ```
 
-The `oauth` block for a future GitHub App or other provider flow is documented
-in PR 4. Do not put real tokens in this repository or in client configuration
-committed to source control.
+Do not put real tokens in this repository or in client configuration committed
+to source control.
+
+### HTTP hardening
+
+`MCP_HTTP_VALIDATE_TOKEN` defaults to `true` in request mode: before a bearer
+token can initialize or enumerate the server, the transport validates it with
+monday's `me` query and caches the result by a SHA-256 token fingerprint. The
+raw token is never stored or logged. Positive results are cached for five
+minutes and failures for thirty seconds; temporary monday failures return
+`503 token_validation_unavailable` instead of being mistaken for bad tokens.
+
+Requests are bounded by `MCP_MAX_REQUEST_BYTES` (default 10 MiB) and by
+`MCP_HTTP_RATE_LIMIT_RPM` (default 120 requests per minute per bearer token or
+remote client; `0` disables the limiter). For reverse-proxy deployments set
+`MCP_HTTP_REQUIRE_TLS=true`. Plaintext non-loopback requests then return
+`426 tls_required` unless the connection is TLS or the trusted proxy sets
+`X-Forwarded-Proto: https`; the proxy must overwrite client-supplied
+forwarded headers. Loopback plaintext remains available for local development.
+
+The HTTP listener uses explicit read-header, read, write, and idle timeouts.
+Health endpoints remain unauthenticated and do not perform monday calls.
 
 ## MCP client configuration
 
-Use the published image (`ghcr.io/jersonmartinez/mcp-monday-projects:0.3.0`,
-also tagged `0.3` and `latest`; see [RELEASING.md](RELEASING.md)) or build
+Use the published image (`ghcr.io/jersonmartinez/mcp-monday-projects:1.5.0`,
+also tagged `1.5` and `latest`; see [RELEASING.md](RELEASING.md)) or build
 your own with `make build`, which tags `mcp-monday-projects:local`. Register
 the server in any MCP client that supports stdio. The client starts one
 container per session:
@@ -95,7 +114,7 @@ container per session:
   "mcpServers": {
     "monday": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "--env-file", "/path/to/mcp-monday-projects/.env", "ghcr.io/jersonmartinez/mcp-monday-projects:0.3.0"]
+      "args": ["run", "--rm", "-i", "--env-file", "/path/to/mcp-monday-projects/.env", "ghcr.io/jersonmartinez/mcp-monday-projects:1.5.0"]
     }
   }
 }
@@ -147,15 +166,20 @@ GitHub Actions mirrors this Docker-first validation:
 - **PR Checks** validates the PR title (Conventional Commits) and branch
   name, and lints YAML, shell scripts, Markdown and relative doc links —
   the same checks as `make lint`.
-- **Security** runs a gitleaks secret scan on pull requests, pushes to
-  `main` and a weekly schedule.
+- **Security** runs gitleaks, govulncheck, Trivy image scanning, and CodeQL
+  on pull requests, pushes to `main` and a weekly schedule.
 - **Labels sync** applies `.github/labels.yaml` (never deletes a label) and
   **Docs Wiki sync** publishes `docs/` to the Wiki once the Wiki exists.
 
-The GraphQL transport retries only transient network failures, HTTP 429,
-HTTP 5xx responses, and monday complexity/rate-limit GraphQL errors (honoring
-`retry_in_seconds`). Retries are bounded by `MCP_MAX_RETRIES` and honor a
-bounded `Retry-After` header. GraphQL validation errors and other permanent
-errors are returned without retrying as typed `RequestError`s carrying
-monday's error code. Nil GraphQL variables are omitted rather than sent as
-`null`, because some monday resolvers reject explicit nulls.
+The GraphQL transport retries only reads affected by transient network
+failures, HTTP 429, HTTP 5xx responses, and monday complexity/rate-limit
+GraphQL errors (honoring `retry_in_seconds`). Retries are bounded by
+`MCP_MAX_RETRIES`, honor a bounded `Retry-After` header, and use jittered
+exponential backoff. Mutations are never retried automatically because monday
+may have applied the write even when the response was lost; reconcile with a
+read before deciding whether to retry manually. Repeated temporary failures
+open a short per-credential circuit breaker keyed by a SHA-256 fingerprint.
+GraphQL validation errors and other permanent errors are returned without
+retrying as typed `RequestError`s carrying monday's error code. Nil GraphQL
+variables are omitted rather than sent as `null`, because some monday
+resolvers reject explicit nulls.

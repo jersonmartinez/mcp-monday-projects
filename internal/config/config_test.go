@@ -60,6 +60,45 @@ func TestLoadWritePolicy(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeHardeningAndToolProfile(t *testing.T) {
+	t.Setenv("MONDAY_API_TOKEN", "test-token")
+	t.Setenv("MCP_TOOL_PROFILE", "developer")
+	t.Setenv("MCP_MAX_REQUEST_BYTES", "1048576")
+	t.Setenv("MCP_HTTP_RATE_LIMIT_RPM", "30")
+	t.Setenv("MCP_HTTP_REQUIRE_TLS", "true")
+	t.Setenv("MCP_HTTP_VALIDATE_TOKEN", "false")
+	t.Setenv("MCP_BULK_MAX_CONCURRENCY", "2")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ToolProfile != ToolProfileDeveloper || cfg.MaxRequestBytes != 1048576 || cfg.HTTPRateLimitRPM != 30 || !cfg.RequireTLS || cfg.ValidateBearer || cfg.BulkMaxConcurrency != 2 {
+		t.Fatalf("cfg = %+v", cfg)
+	}
+}
+
+func TestLoadRejectsInvalidRuntimeHardening(t *testing.T) {
+	cases := map[string]string{
+		"MCP_TOOL_PROFILE":         "admin",
+		"MCP_MAX_REQUEST_BYTES":    "10",
+		"MCP_HTTP_RATE_LIMIT_RPM":  "-1",
+		"MCP_BULK_MAX_CONCURRENCY": "11",
+		"MONDAY_API_VERSION":       "next",
+		"MCP_MAX_RESPONSE_BYTES":   "999999999",
+		"MCP_HTTP_TIMEOUT":         "5m",
+		"MCP_HTTP_PATH":            "/mcp broken",
+	}
+	for name, value := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("MONDAY_API_TOKEN", "test-token")
+			t.Setenv(name, value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted %s=%s", name, value)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsInvalidWritePolicy(t *testing.T) {
 	cases := map[string]string{
 		"MONDAY_WRITE_BOARD_ALLOWLIST":     "12,abc",

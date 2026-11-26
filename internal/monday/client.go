@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ type Client struct {
 	apiVersion       string
 	maxResponseBytes int64
 	maxRetries       int
+	breakers         *circuitBreakers
 }
 
 type requestTokenKey struct{}
@@ -89,6 +91,7 @@ func NewClient(cfg config.Config) *Client {
 		apiVersion:       cfg.APIVersion,
 		maxResponseBytes: cfg.MaxResponseBytes,
 		maxRetries:       cfg.MaxRetries,
+		breakers:         newCircuitBreakers(),
 	}
 }
 
@@ -105,13 +108,34 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 			return errors.New("monday request requires a bearer credential")
 		}
 	}
+	breakerKey := credentialFingerprint(apiToken)
+	if err := c.breakers.allow(breakerKey); err != nil {
+		return err
+	}
+	finish := func(err error) error {
+		if err == nil {
+			c.breakers.success(breakerKey)
+			return nil
+		}
+		if temporaryFailure(err) && ctx.Err() == nil {
+			c.breakers.failure(breakerKey)
+		}
+		return err
+	}
 	payload, err := json.Marshal(GraphQLRequest{Query: query, Variables: compactVariables(variables)})
 	if err != nil {
 		return fmt.Errorf("marshal graphql request: %w", err)
 	}
 
+	maxAttempts := c.maxRetries + 1
+	if isMutation(query) {
+		// A retried mutation can duplicate creates or repeat irreversible deletes:
+		// monday may have accepted it even when the response was lost. Reads remain
+		// retryable; mutations fail once and leave the retry decision to the caller.
+		maxAttempts = 1
+	}
 	var lastErr error
-	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL, bytes.NewReader(payload))
 		if err != nil {
 			return fmt.Errorf("create monday request: %w", err)
@@ -125,14 +149,14 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			lastErr = fmt.Errorf("monday request failed: %s", redactToken(err.Error(), apiToken))
-			if attempt < c.maxRetries {
+			lastErr = &TransportError{Message: fmt.Sprintf("monday request failed: %s", redactToken(err.Error(), apiToken))}
+			if attempt < maxAttempts-1 {
 				if err := waitForRetry(ctx, attempt, 0); err != nil {
 					return err
 				}
 				continue
 			}
-			return lastErr
+			return finish(lastErr)
 		}
 
 		limited := io.LimitReader(response.Body, c.maxResponseBytes+1)
@@ -151,13 +175,13 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 				RetryAfter: retryAfter(response.Header.Get("Retry-After")),
 				Temporary:  response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500,
 			}
-			if apiErr.Temporary && attempt < c.maxRetries {
+			if apiErr.Temporary && attempt < maxAttempts-1 {
 				if err := waitForRetry(ctx, attempt, apiErr.RetryAfter); err != nil {
 					return err
 				}
 				continue
 			}
-			return apiErr
+			return finish(apiErr)
 		}
 
 		var envelope GraphQLResponse
@@ -167,27 +191,34 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 		if len(envelope.Errors) > 0 {
 			reqErr := newRequestError(envelope.Errors[0])
 			reqErr.Message = redactToken(reqErr.Message, apiToken)
-			if reqErr.Temporary() && attempt < c.maxRetries {
+			if reqErr.Temporary() && attempt < maxAttempts-1 {
 				lastErr = reqErr
 				if err := waitForRetry(ctx, attempt, reqErr.RetryAfter); err != nil {
 					return err
 				}
 				continue
 			}
-			return reqErr
+			return finish(reqErr)
 		}
 		if envelope.ErrorCode != "" {
-			return &RequestError{Code: envelope.ErrorCode, Message: redactToken(envelope.ErrorMessage, apiToken)}
+			return finish(&RequestError{Code: envelope.ErrorCode, Message: redactToken(envelope.ErrorMessage, apiToken)})
 		}
 		if output == nil {
-			return nil
+			return finish(nil)
 		}
 		if err := json.Unmarshal(envelope.Data, output); err != nil {
 			return fmt.Errorf("decode monday data: %w", err)
 		}
-		return nil
+		return finish(nil)
 	}
-	return lastErr
+	return finish(lastErr)
+}
+
+// isMutation detects GraphQL mutation documents. The server treats every
+// non-mutation as a read for retry purposes; monday queries in this codebase
+// always use an explicit query/mutation keyword.
+func isMutation(query string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(query)), "mutation")
 }
 
 // compactVariables drops nil variables. An omitted nullable variable means
@@ -219,6 +250,11 @@ func waitForRetry(ctx context.Context, attempt int, retryAfter time.Duration) er
 	delay := retryAfter
 	if delay == 0 {
 		delay = min(250*time.Millisecond*time.Duration(1<<attempt), 5*time.Second)
+	}
+	// Add +/-20% jitter so independently retried reads do not synchronize into
+	// a thundering herd after monday recovers or a rate-limit window resets.
+	if jitter := delay / 5; jitter > 0 {
+		delay += time.Duration(rand.Int64N(int64(2*jitter))) - jitter
 	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()

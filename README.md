@@ -2,14 +2,14 @@
 
 [![CI](https://github.com/jersonmartinez/mcp-monday-projects/actions/workflows/ci.yaml/badge.svg)](https://github.com/jersonmartinez/mcp-monday-projects/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8.svg?logo=go)](go.mod)
+[![Go](https://img.shields.io/badge/Go-1.27%2B-00ADD8.svg?logo=go)](go.mod)
 [![Docker](https://img.shields.io/badge/Docker--first-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
 
 A high-performance, Docker-first [Model Context Protocol](https://modelcontextprotocol.io/) server for monday.com, written in Go. It works with any MCP client that supports the stdio transport.
 
 ## Features
 
-- **103 typed MCP tools** (96 at the default access level, plus 7 permanent deletes at `full`) across workspaces, boards, groups, columns, items, bulk operations, users and teams, updates, tags, reports, dependency management, verification, and program-scale rollups — plus 2 reusable prompts.
+- **105 typed MCP tools** (98 at the default access level, plus 7 permanent deletes at `full`) across workspaces, boards, groups, columns, items, bulk operations, users and teams, updates, tags, reports, dependency management, verification, and program-scale rollups — plus 2 reusable prompts.
 - **Validated writes** — friendly column values (`"Done"`, `"2026-10-01"`, `[user_id]`) are checked against the live board schema and converted to monday JSON before any mutation. See [docs/COLUMN_VALUES.md](docs/COLUMN_VALUES.md).
 - **Safe by construction** — archive by default, permanent deletes only at `MCP_ACCESS_LEVEL=full` with `confirm: true`, `confirm` gates on board/group archive, bulk operations capped at 50 rows with `dry_run: true` by default and all-or-nothing validation.
 - **Access levels and write policy** — `MCP_ACCESS_LEVEL=read|write|full` decides which tools exist; `MCP_WRITE_TOOL_ALLOWLIST` can narrow the exposed non-read tools without hiding reads; `MONDAY_WORKSPACE_ID` confines the server to one workspace; board and workspace allowlists fence mutations. See [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
@@ -17,7 +17,7 @@ A high-performance, Docker-first [Model Context Protocol](https://modelcontextpr
 - **Operational reports** — summary, workload, overdue, stale, standup, 0–100 health score, Markdown/CSV export, workspace overview. See [docs/REPORTS.md](docs/REPORTS.md).
 - **Board templates** — `provision_board_from_template` builds DevOps, incident, release, or project boards with typed columns, ordered groups, and validated seed items in one call.
 - **Self-describing** — `list_tool_catalog` returns every tool with category, capability, and read-only/destructive hints; MCP annotations are set on every tool.
-- **Transportes Docker-first** — stdio remains the default; optional stateless Streamable HTTP exposes `/healthz`, `/readyz`, and `/mcp` for local integrations. HTTP in this PR still uses the process token and must not be exposed beyond a trusted local network; per-request credentials are added in PR 2.
+- **Docker-first transports** — stdio remains the default; optional stateless Streamable HTTP exposes `/healthz`, `/readyz`, and `/mcp`. HTTP defaults to per-request bearer credentials and supports cached token validation, client-key checks, request-size limits, per-client rate limits, and optional TLS enforcement for reverse-proxy deployments.
 - **Reproducible real-account smoke suite** — see [docs/SMOKE.md](docs/SMOKE.md).
 
 ## Quick start
@@ -37,7 +37,7 @@ Only Docker and Docker Compose are required on the host. Go, tests, formatting, 
 
 | Category | Tools |
 |---|---|
-| Diagnostics | `server_info`, `list_tool_catalog`, `get_me`, `get_api_status` |
+| Diagnostics | `server_info`, `list_tool_catalog`, `search_tools`, `get_operational_metrics`, `get_me`, `get_api_status` |
 | Workspaces | `list_workspaces`, `get_workspace`, `create_workspace`, `list_folders`, `create_folder` |
 | Boards | `list_boards`, `get_board`, `get_board_schema`, `create_board`, `update_board`, `archive_board`, `duplicate_board`, `add_board_subscribers`, `list_board_templates`, `provision_board_from_template` |
 | Groups | `list_board_groups`, `create_group`, `update_group`, `duplicate_group`, `archive_group` |
@@ -62,9 +62,11 @@ Full reference with modes and capabilities: [docs/TOOLS.md](docs/TOOLS.md).
 | `MONDAY_API_URL` | no | `https://api.monday.com/v2` | Monday GraphQL endpoint (HTTPS only) |
 | `MCP_HTTP_TIMEOUT` | no | `15s` | Outbound request timeout |
 | `MCP_MAX_RESPONSE_BYTES` | no | `4194304` | Response size limit |
-| `MCP_MAX_RETRIES` | no | `2` | Bounded retries for transient HTTP/complexity failures |
+| `MCP_MAX_RETRIES` | no | `2` | Bounded retries for transient read failures; mutations are never retried automatically |
+| `MCP_BULK_MAX_CONCURRENCY` | no | `4` | Worker limit for independent rows inside bulk mutations (1–10) |
 | `MONDAY_WORKSPACE_ID` | no | — | Confine every read and write to this workspace ID; see [workspace scope](docs/CAPABILITIES.md#workspace-scope) |
 | `MCP_ACCESS_LEVEL` | no | `write` | `read` (read tools only), `write` (create/update/archive), or `full` (also permanent deletes); `MCP_READ_ONLY` was removed in v1.0.0 |
+| `MCP_TOOL_PROFILE` | no | `full` | Discovery profile: `full`, `read_only`, `developer`, `devops`, or `project_manager`; access levels and write allowlists still enforce policy |
 | `MCP_SERVER_INSTRUCTIONS` | no | built-in | Replace the model-facing server instructions; maximum 4000 characters |
 | `MCP_WRITE_TOOL_ALLOWLIST` | no | empty | Comma-separated exact names of non-read tools to expose; empty preserves current behavior, read tools are unaffected |
 | `MONDAY_WRITE_BOARD_ALLOWLIST` | no | — | Comma-separated board IDs allowed for mutations |
@@ -79,6 +81,10 @@ Full reference with modes and capabilities: [docs/TOOLS.md](docs/TOOLS.md).
 | `MCP_ALLOW_SHARED_TOKEN` | no | `false` | Required `true` only for HTTP plus `MCP_AUTH_MODE=env` |
 | `MCP_CLIENT_KEY` | no | — | Optional shared client key required as `X-MCP-Client-Key` |
 | `MCP_ALLOWED_TOKEN_PREFIXES` | no | empty | Comma-separated bearer prefixes; empty allows any Monday token |
+| `MCP_MAX_REQUEST_BYTES` | no | `10485760` | Maximum Streamable HTTP request body (1 KiB–128 MiB) |
+| `MCP_HTTP_RATE_LIMIT_RPM` | no | `120` | Per-client HTTP requests per minute; `0` disables the limiter |
+| `MCP_HTTP_REQUIRE_TLS` | no | `false` | Reject plaintext non-loopback requests unless terminated as HTTPS or forwarded with `X-Forwarded-Proto: https` |
+| `MCP_HTTP_VALIDATE_TOKEN` | no | `true` | Validate HTTP bearer tokens against monday with a short fingerprint-keyed cache |
 | `MCP_PROFILE` | no | — | Load `profiles/<name>.env`, a pinned target (token reference, workspace, access level, allowlists); see [profiles](docs/CAPABILITIES.md#profiles) |
 | `MCP_PROFILES_DIR` | no | `/profiles` in the image | Directory that holds profile files |
 | `MONDAY_API_TOKEN_ENV` | no | — | In a profile: the NAME of the variable holding that account's token (profiles never contain the token itself) |
@@ -93,11 +99,11 @@ MCP tools → application services → domain models → monday port → GraphQL
 
 | Package | Responsibility |
 |---|---|
-| `cmd/mcp-server` | Entrypoint: configuration, logging to stderr, stdio transport |
-| `internal/mcpserver` | Tool registry, typed inputs/outputs, annotations, prompts |
-| `internal/application` | Use cases: input validation, write policy, dry-run planning, bulk, provisioning, report snapshots |
+| `cmd/mcp-server` | Entrypoint: configuration, logging to stderr, stdio and Streamable HTTP transports |
+| `internal/mcpserver` | Tool registry, typed inputs/outputs, annotations, prompts, HTTP hardening, operational metrics |
+| `internal/application` | Use cases: input validation, write policy, dry-run planning, bounded bulk concurrency, provisioning, report snapshots |
 | `internal/domain` | Provider-neutral types, column-value validation, templates, pure report calculations |
-| `internal/monday` | GraphQL adapter: queries, JSON encoding, typed errors, retries, limits |
+| `internal/monday` | GraphQL adapter: queries, JSON encoding, typed errors, read-only retries, circuit breakers, limits |
 | `internal/config` | Validated environment configuration |
 
 The protocol layer never builds GraphQL. Decisions are recorded in [docs/adr](docs/adr/README.md).
@@ -125,8 +131,8 @@ make wiki-preview     Build the Wiki pages from docs/ into ./wiki_out
 make clean            Remove local images and Compose resources
 ```
 
-The server is built with the Go 1.27.1 toolchain image; `go.mod` requires Go
-1.25 or later.
+The server is built with the pinned Go 1.27.4 toolchain image; `go.mod`
+requires Go 1.27 or later.
 
 ## Documentation
 
