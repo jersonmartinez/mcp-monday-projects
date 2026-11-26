@@ -147,7 +147,7 @@ requires Go 1.27 or later.
 | [docs/REPORTS.md](docs/REPORTS.md) | Report semantics and health score |
 | [docs/SMOKE.md](docs/SMOKE.md) | Real-account smoke suite |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Every startup, policy and validation error with its fix |
-| [docs/RELEASING.md](docs/RELEASING.md) | Versioning, the release workflow and the GHCR image |
+| [docs/RELEASING.md](docs/RELEASING.md) | Automated versioning, releases, tags and the GHCR image |
 | [docs/adr](docs/adr/README.md) | Architecture decision records |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes |
 

@@ -1,36 +1,96 @@
+---
 # Release
-# On a vX.Y.Z tag: verify the tag matches the code Version and CHANGELOG,
-# build the runtime image for linux/amd64 and linux/arm64, push it to GHCR
-# (ghcr.io/<owner>/mcp-monday-projects:X.Y.Z, X.Y and latest) and publish a
-# GitHub release whose notes are the CHANGELOG section. See docs/RELEASING.md.
+# Publishes an immutable vX.Y.Z release either when the tag is pushed or when
+# the workflow is dispatched by release-automation.yaml/a maintainer. It
+# verifies that the tag, Go Version constant and CHANGELOG agree, tests the
+# tagged tree, builds linux/amd64 + linux/arm64, pushes GHCR tags X.Y.Z, X.Y
+# and latest with SBOM/provenance, then publishes the GitHub release.
 name: Release
-run-name: 'Release ${{ github.ref_name }}'
+run-name: 'Release ${{ inputs.tag || github.ref_name }}'
 
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v1.5.0 — created on 'ref' when missing"
+        required: true
+        type: string
+      ref:
+        description: "Commit/branch the new tag points at"
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
   release:
-    name: Build, push and publish
+    name: Verify, test, build, push and publish
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     permissions:
-      contents: write   # create the GitHub release
+      contents: write   # create/push the tag + the GitHub release
       packages: write   # push to ghcr.io
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve and create release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::tag must look like v1.5.0, got '$tag'"
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "$tag" >/dev/null 2>&1; then
+              echo "Tag $tag already exists — rebuilding and republishing it."
+            else
+              git tag -a "$tag" -m "$tag"
+              git push origin "refs/tags/$tag"
+              echo "Created tag $tag on $GITHUB_SHA."
+            fi
+          else
+            tag="$REF_NAME"
+          fi
+          version="${tag#v}"
+          {
+            echo "RELEASE_TAG=$tag"
+            echo "IMAGE_VERSION=$version"
+            echo "IMAGE_MAJOR_MINOR=${version%.*}"
+          } >> "$GITHUB_ENV"
+
+      - name: Check out release tag
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" || true
+          git checkout "$RELEASE_TAG"
 
       - name: Verify tag, code version and CHANGELOG
-        run: bash scripts/release_notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+        run: bash scripts/release_notes.sh "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Test the tagged tree
+        run: |
+          docker build --target builder -t mcp-monday-projects:release-test .
+          docker run --rm mcp-monday-projects:release-test go test ./...
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
@@ -50,9 +110,10 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         with:
           images: ghcr.io/${{ github.repository }}
+          # Raw tags make the tag-push and workflow_dispatch paths identical.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ env.IMAGE_VERSION }}
+            type=raw,value=${{ env.IMAGE_MAJOR_MINOR }}
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=mcp-monday-projects
@@ -73,7 +134,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          gh release create "$GITHUB_REF_NAME"
-          --title "$GITHUB_REF_NAME"
+          gh release create "$RELEASE_TAG"
+          --title "$RELEASE_TAG"
           --notes-file "$RUNNER_TEMP/release-notes.md"
           --verify-tag
