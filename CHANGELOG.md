@@ -4,7 +4,13 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — Hardening, performance and operability
+## [Unreleased]
+
+## [1.6.0] - 2026-11-26
+
+### 🚀 Features
+
+- **Automate merge-to-main release pipelines** by @jersonmartinez in [#75](https://github.com/jersonmartinez/mcp-monday-projects/pull/75).
 
 ### Added
 
@@ -47,6 +53,17 @@ All notable changes are documented here. The format follows
 The stable tool schema digest changes intentionally because the additive
 `search_tools` and `get_operational_metrics` tools expand the catalog.
 Existing tool schemas are unchanged.
+
+### 📦 Release data
+
+- **Version:** `v1.6.0` (`minor` bump from `v1.5.0` — new user-facing capability).
+- **Compatibility:** ✅ backwards-compatible feature release.
+- **Source:** pull request [#75](https://github.com/jersonmartinez/mcp-monday-projects/pull/75); merge commit `b9cec480dd2a`.
+- **Scope:** includes curated changes that were accumulated under `[Unreleased]` before automation.
+- **Compare:** [`v1.0.0...v1.6.0`](https://github.com/jersonmartinez/mcp-monday-projects/compare/v1.0.0...v1.6.0).
+  The previous declared version `v1.5.0` has no git tag; the comparison starts at the last published tag `v1.0.0`.
+- **Container image:** `ghcr.io/jersonmartinez/mcp-monday-projects:1.6.0` (also `ghcr.io/jersonmartinez/mcp-monday-projects:1.6` and `ghcr.io/jersonmartinez/mcp-monday-projects:latest`).
+- **Upgrade:** `docker pull ghcr.io/jersonmartinez/mcp-monday-projects:1.6.0`.
 
 ## [1.0.0] — Stable contract
 
