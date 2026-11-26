@@ -88,6 +88,9 @@ Full reference with modes and capabilities: [docs/TOOLS.md](docs/TOOLS.md).
 | `MCP_PROFILE` | no | — | Load `profiles/<name>.env`, a pinned target (token reference, workspace, access level, allowlists); see [profiles](docs/CAPABILITIES.md#profiles) |
 | `MCP_PROFILES_DIR` | no | `/profiles` in the image | Directory that holds profile files |
 | `MONDAY_API_TOKEN_ENV` | no | — | In a profile: the NAME of the variable holding that account's token (profiles never contain the token itself) |
+| `MCP_OAUTH_CLIENT_ID` / `MCP_OAUTH_CLIENT_SECRET` | for OAuth login | — | Monday OAuth 2.1 application credentials; keep the secret outside Git |
+| `MCP_OAUTH_REDIRECT_URI` | for OAuth login | localhost callback | Registered OAuth callback URL |
+| `MCP_OAUTH_TOKEN_FILE` | for OAuth stdio | — | Per-user 0600 OAuth token-pair file |
 
 See [docs/SETUP.md](docs/SETUP.md) for token handling and API versioning. Confirm the stable version against Monday's [versioning documentation](https://developer.monday.com/api-reference/docs/api-versioning) before upgrades.
 

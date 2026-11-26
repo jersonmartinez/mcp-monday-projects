@@ -17,9 +17,7 @@ All notable changes are documented here. The format follows
 - **HTTP hardening controls:** bounded request bodies, per-client rate limits,
   optional TLS enforcement, cached bearer validation, security headers, and
   complete HTTP server timeouts for the Streamable HTTP transport.
-- **Bounded bulk concurrency:** independent rows inside bulk mutations run
-  through `MCP_BULK_MAX_CONCURRENCY` (default 4, maximum 10) while preserving
-  stable row order and all-or-nothing validation.
+- **Per-user Monday OAuth 2.1 + PKCE login:** `mcp-monday-oauth` opens the browser, handles the localhost callback, exchanges and refreshes tokens, revokes authorizations, and stores token pairs with restrictive permissions.
 
 ### Changed
 
