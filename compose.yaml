@@ -7,6 +7,8 @@ services:
     image: mcp-monday-projects:local
     env_file:
       - .env
+    volumes:
+      - ${HOME}/.config/mcp-monday:/oauth:ro
     stdin_open: true
     tty: false
     restart: "no"

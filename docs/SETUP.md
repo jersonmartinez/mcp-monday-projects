@@ -27,6 +27,59 @@ repository was initialized. Check the [Monday API versioning
 documentation](https://developer.monday.com/api-reference/docs/api-versioning)
 before upgrading it. Do not use a release candidate in production.
 
+## OAuth 2.1 per usuario
+
+Para autenticar desde una terminal mediante el navegador, configura una app de
+Monday en el Developer Center y registra exactamente la URL de callback. Las
+apps nuevas usan OAuth 2.1 con PKCE S256.
+
+Configura estas variables en `.env` o en el entorno de la persona:
+
+```dotenv
+MCP_OAUTH_CLIENT_ID=...
+MCP_OAUTH_CLIENT_SECRET=...
+MCP_OAUTH_REDIRECT_URI=http://127.0.0.1:8765/oauth/callback
+MCP_OAUTH_SCOPES=me:read boards:read boards:write
+MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json
+MCP_OAUTH_SUBDOMAIN=                 # opcional; fija una cuenta Monday
+```
+
+El secreto de cliente y el archivo de tokens nunca se versionan. El archivo se
+crea con permisos `0600` y contiene el access token, refresh token, expiración,
+región y scopes, nunca el secreto de cliente.
+
+Ejecuta el flujo desde la raíz del repositorio:
+
+```bash
+make oauth-login
+make oauth-status
+make oauth-refresh
+make oauth-logout
+```
+
+`make oauth-login` abre el navegador, genera `state` y PKCE, recibe el callback
+local, intercambia el código en `https://auth.monday.com/oauth_ms/oauth/token`
+y guarda el token para ese usuario. `make oauth-refresh` rota el refresh token;
+`make oauth-logout` revoca la autorización y elimina el archivo local.
+
+Para usar el token con un MCP HTTP, el cliente debe enviar el access token como
+`Authorization: Bearer ...` en cada petición. Para stdio, configura
+`MCP_OAUTH_TOKEN_FILE`; el proceso carga el token del usuario al arrancar.
+Cada usuario debe tener su propio archivo y proceso/perfil. No compartas un
+token personal entre usuarios.
+
+Para usar el token OAuth con `make run`, configura
+`MCP_OAUTH_TOKEN_FILE=/oauth/oauth.json` y deja el archivo local en
+`$HOME/.config/mcp-monday/oauth.json`; Compose monta ese directorio en modo
+solo lectura. Si registras el servidor directamente en otro cliente Docker,
+monta el mismo directorio como `/oauth:ro`.
+
+Referencias oficiales:
+
+- [OAuth 2.1 de Monday](https://developer.monday.com/apps/docs/oauth-2-1)
+- [Scopes y redirect URLs](https://developer.monday.com/apps/docs/oauth)
+- [Metadata del authorization server](https://auth.monday.com/.well-known/oauth-authorization-server)
+
 ## Run
 
 ```bash
@@ -114,7 +167,14 @@ container per session:
   "mcpServers": {
     "monday": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "--env-file", "/path/to/mcp-monday-projects/.env", "ghcr.io/jersonmartinez/mcp-monday-projects:1.5.0"]
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--env-file",
+        "/path/to/mcp-monday-projects/.env",
+        "ghcr.io/jersonmartinez/mcp-monday-projects:1.5.0"
+      ]
     }
   }
 }

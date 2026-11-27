@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jersonmartinez/mcp-monday-projects/internal/oauth"
 )
 
 const defaultAPIURL = "https://api.monday.com/v2"
@@ -14,7 +16,9 @@ const defaultAPIVersion = "2026-07"
 
 // Config contains validated runtime configuration for the MCP server.
 type Config struct {
-	APIToken             string
+	APIToken string
+	// OAuthTokenFile loads a per-user OAuth access token for stdio mode.
+	OAuthTokenFile       string
 	Transport            string
 	HTTPHost             string
 	HTTPPort             int
@@ -100,10 +104,17 @@ func (env source) config() (Config, error) {
 	}
 
 	var token string
+	oauthTokenFile := strings.TrimSpace(env.get("MCP_OAUTH_TOKEN_FILE"))
 	if authMode == "env" {
 		token, err = env.token()
-		if err != nil {
+		if err != nil && oauthTokenFile == "" {
 			return Config{}, err
+		}
+		if token == "" && oauthTokenFile != "" {
+			token, err = oauth.LoadAccessTokenFile(oauthTokenFile)
+			if err != nil {
+				return Config{}, fmt.Errorf("OAuth token file: %w", err)
+			}
 		}
 	}
 
@@ -207,6 +218,7 @@ func (env source) config() (Config, error) {
 
 	return Config{
 		APIToken:                token,
+		OAuthTokenFile:          oauthTokenFile,
 		Transport:               transport,
 		HTTPHost:                host,
 		HTTPPort:                port,

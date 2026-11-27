@@ -19,6 +19,21 @@ All notable changes are documented here. The format follows
 
 The stable tool schema digest changes intentionally because this feature set adds fourteen tools. Existing tool schemas remain compatible; role profiles now expose workflow writes where appropriate.
 
+## [1.7.0] - 2026-11-26
+
+### 🚀 Features
+
+- **Add Monday OAuth 2.1 PKCE login** by @Jerson-Martinez-JEM0925 in [#82](https://github.com/jersonmartinez/mcp-monday-projects/pull/82).
+
+### 📦 Release data
+
+- **Version:** `v1.7.0` (`minor` bump from `v1.6.0` — new user-facing capability).
+- **Compatibility:** ✅ backwards-compatible feature release.
+- **Source:** pull request [#82](https://github.com/jersonmartinez/mcp-monday-projects/pull/82); merge commit `eb6079049acc`.
+- **Compare:** [`v1.6.0...v1.7.0`](https://github.com/jersonmartinez/mcp-monday-projects/compare/v1.6.0...v1.7.0).
+- **Container image:** `ghcr.io/jersonmartinez/mcp-monday-projects:1.7.0` (also `ghcr.io/jersonmartinez/mcp-monday-projects:1.7` and `ghcr.io/jersonmartinez/mcp-monday-projects:latest`).
+- **Upgrade:** `docker pull ghcr.io/jersonmartinez/mcp-monday-projects:1.7.0`.
+
 ## [1.6.0] - 2026-11-26
 
 ### 🚀 Features
@@ -36,9 +51,7 @@ The stable tool schema digest changes intentionally because this feature set add
 - **HTTP hardening controls:** bounded request bodies, per-client rate limits,
   optional TLS enforcement, cached bearer validation, security headers, and
   complete HTTP server timeouts for the Streamable HTTP transport.
-- **Bounded bulk concurrency:** independent rows inside bulk mutations run
-  through `MCP_BULK_MAX_CONCURRENCY` (default 4, maximum 10) while preserving
-  stable row order and all-or-nothing validation.
+- **Per-user Monday OAuth 2.1 + PKCE login:** `mcp-monday-oauth` opens the browser, handles the localhost callback, exchanges and refreshes tokens, revokes authorizations, and stores token pairs with restrictive permissions.
 
 ### Changed
 
