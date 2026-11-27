@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-27
+
+### 🚀 Features
+
+- **Add workflow orchestration and operational intelligence** by @jersonmartinez in [#83](https://github.com/jersonmartinez/mcp-monday-projects/pull/83).
+
 ### Added
 
 - **Bulk creation and table imports:** `bulk_create_items` validates up to 50 rows before any write, detects duplicate batch names, supports group IDs or exact titles, and preserves input order. `import_board_table` imports CSV or Markdown tables through the same validation, dry-run-first safety, bounded concurrency, and row-level outcome contract.
@@ -18,6 +24,16 @@ All notable changes are documented here. The format follows
 ### Contract note
 
 The stable tool schema digest changes intentionally because this feature set adds fourteen tools. Existing tool schemas remain compatible; role profiles now expose workflow writes where appropriate.
+
+### 📦 Release data
+
+- **Version:** `v1.8.0` (`minor` bump from `v1.7.0` — new user-facing capability).
+- **Compatibility:** ✅ backwards-compatible feature release.
+- **Source:** pull request [#83](https://github.com/jersonmartinez/mcp-monday-projects/pull/83); merge commit `cfe00dcd4542`.
+- **Scope:** includes curated changes that were accumulated under `[Unreleased]` before automation.
+- **Compare:** [`v1.7.0...v1.8.0`](https://github.com/jersonmartinez/mcp-monday-projects/compare/v1.7.0...v1.8.0).
+- **Container image:** `ghcr.io/jersonmartinez/mcp-monday-projects:1.8.0` (also `ghcr.io/jersonmartinez/mcp-monday-projects:1.8` and `ghcr.io/jersonmartinez/mcp-monday-projects:latest`).
+- **Upgrade:** `docker pull ghcr.io/jersonmartinez/mcp-monday-projects:1.8.0`.
 
 ## [1.7.0] - 2026-11-26
 
