@@ -97,6 +97,12 @@ func NewClient(cfg config.Config) *Client {
 
 // Do executes one GraphQL request and decodes the response into output.
 func (c *Client) Do(ctx context.Context, query string, variables map[string]any, output any) error {
+	return c.DoWithVersion(ctx, query, variables, output, "")
+}
+
+// DoWithVersion executes one GraphQL request with an optional monday API-version override.
+// Preview/automation operations use explicit versions without changing the server default.
+func (c *Client) DoWithVersion(ctx context.Context, query string, variables map[string]any, output any, versionOverride string) error {
 	if query == "" {
 		return fmt.Errorf("graphql query cannot be empty")
 	}
@@ -141,7 +147,11 @@ func (c *Client) Do(ctx context.Context, query string, variables map[string]any,
 			return fmt.Errorf("create monday request: %w", err)
 		}
 		req.Header.Set("Authorization", apiToken)
-		req.Header.Set("API-Version", c.apiVersion)
+		apiVersion := c.apiVersion
+		if versionOverride != "" {
+			apiVersion = versionOverride
+		}
+		req.Header.Set("API-Version", apiVersion)
 		req.Header.Set("Content-Type", "application/json")
 
 		response, err := c.httpClient.Do(req)

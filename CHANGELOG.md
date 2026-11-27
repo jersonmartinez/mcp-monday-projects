@@ -6,6 +6,19 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Bulk creation and table imports:** `bulk_create_items` validates up to 50 rows before any write, detects duplicate batch names, supports group IDs or exact titles, and preserves input order. `import_board_table` imports CSV or Markdown tables through the same validation, dry-run-first safety, bounded concurrency, and row-level outcome contract.
+- **Asset visibility:** `list_item_assets` and `list_update_assets` expose file metadata for items, file columns, gallery entries, and update attachments. Expiring provider URLs stay redacted unless `include_urls=true`.
+- **Native automation lifecycle control and observability:** `list_automations`, `create_automation`, `manage_automation`, `delete_automation`, `get_automation_statistics`, and `list_automation_runs` expose monday workflow configuration, dry-run-first template/direct creation through the preview workflow API, guarded activation/deactivation/deletion, outcome totals, and execution history where the provider API supports them. Deletion requires full access and confirmation; creation, activation, and deactivation verify board ownership/scope first and never require embedded credential secrets.
+- **Deterministic MCP workflows:** `run_board_automation` evaluates declarative rules against a bounded board snapshot and applies validated transitions; `complete_item` and `handoff_item` orchestrate common multi-step completion and ownership-transfer flows. All three are dry-run by default and enforce the normal workspace scope, write allowlists, concurrency limits, and row-level audit output.
+- **Execution statistics:** `board_flow_metrics` reports WIP by status/group, bottleneck status, workload, completion, overdue/stale work, throughput, open-age, and cycle-time approximations with explicit proxy/truncation warnings.
+- **Guided workflow reviews:** new `automation_health_review` and `flow_metrics_review` MCP prompts orchestrate safe evidence gathering, proxy interpretation, and dry-run-first next actions.
+
+### Contract note
+
+The stable tool schema digest changes intentionally because this feature set adds fourteen tools. Existing tool schemas remain compatible; role profiles now expose workflow writes where appropriate.
+
 ## [1.7.0] - 2026-11-26
 
 ### 🚀 Features

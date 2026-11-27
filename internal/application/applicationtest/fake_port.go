@@ -30,6 +30,8 @@ type FakePort struct {
 	// HiddenColumns simulates columns the token cannot view: monday omits them
 	// from every column_values response instead of returning them empty.
 	HiddenColumns map[string]bool
+	// AutomationPages optionally overrides ListAutomations by cursor for pagination tests.
+	AutomationPages map[string]domain.AutomationPage
 }
 
 // NewFakePort returns a fake with board "100" (group "todo") and item "500".
@@ -350,4 +352,58 @@ func (f *FakePort) DeleteUpdate(context.Context, string) error { return f.record
 func (f *FakePort) DeleteFolder(context.Context, string) error { return f.record("delete_folder") }
 func (f *FakePort) DeleteWorkspace(context.Context, string) error {
 	return f.record("delete_workspace")
+}
+
+func (f *FakePort) ListItemAssets(_ context.Context, itemID, _ string, _ []string) ([]domain.Asset, error) {
+	if _, ok := f.Items[itemID]; !ok {
+		return nil, &monday.NotFoundError{Resource: "item", ID: itemID}
+	}
+	return []domain.Asset{{ID: "a1", Name: "spec.pdf", FileExtension: "pdf", FileSize: 123, URL: "https://assets.example/a1", PublicURL: "https://public.example/a1"}}, nil
+}
+
+func (f *FakePort) ListUpdateAssets(_ context.Context, updateID string) ([]domain.Asset, error) {
+	if updateID != "77" {
+		return nil, &monday.NotFoundError{Resource: "update", ID: updateID}
+	}
+	return []domain.Asset{{ID: "a2", Name: "trace.log", FileExtension: "log", FileSize: 42, URL: "https://assets.example/a2", PublicURL: "https://public.example/a2"}}, nil
+}
+
+func (f *FakePort) ListAutomations(_ context.Context, boardID string, _ int, cursor string, _ bool) (domain.AutomationPage, error) {
+	if boardID != "100" {
+		return domain.AutomationPage{}, &monday.NotFoundError{Resource: "board", ID: boardID}
+	}
+	if f.AutomationPages != nil {
+		if page, ok := f.AutomationPages[cursor]; ok {
+			return page, nil
+		}
+		return domain.AutomationPage{}, nil
+	}
+	return domain.AutomationPage{Automations: []domain.Automation{{ID: "77", Title: "When done close item", Active: true}}}, nil
+}
+
+func (f *FakePort) CreateAutomation(_ context.Context, input monday.CreateAutomationInput) (string, error) {
+	if input.BoardID != "100" {
+		return "", &monday.NotFoundError{Resource: "board", ID: input.BoardID}
+	}
+	return "88", f.record("create_automation")
+}
+
+func (f *FakePort) ManageAutomation(_ context.Context, action, boardID, automationID string) (bool, error) {
+	if automationID != "77" {
+		return false, &monday.NotFoundError{Resource: "automation", ID: automationID}
+	}
+	return true, f.record("manage_automation_" + action)
+}
+
+func (f *FakePort) AutomationTotals(context.Context, string, []string) (domain.AutomationStatistics, error) {
+	return domain.AutomationStatistics{Success: 8, Failure: 2, Total: 10}, nil
+}
+
+func (f *FakePort) AutomationEntityTotals(context.Context, string, string, []string, []string) (domain.AutomationEntityStatistics, error) {
+	return domain.AutomationEntityStatistics{ID: "77", AutomationStatistics: map[string]any{"77": 2}}, nil
+}
+
+func (f *FakePort) ListAutomationRuns(context.Context, string, int, []string, []string, string) (domain.AutomationRunPage, error) {
+	runs := []domain.AutomationRun{{TriggerUUID: "run-1", EventState: "success"}, {TriggerUUID: "run-2", EventState: "failure", ErrorReason: "example"}}
+	return domain.AutomationRunPage{Runs: runs, Count: len(runs), StateCounts: map[string]int{"success": 1, "failure": 1}}, nil
 }

@@ -391,6 +391,7 @@ type BulkUpdate struct {
 // BulkResult reports the plan and, when executed, the per-item outcome.
 type BulkResult struct {
 	DryRun    bool             `json:"dry_run"`
+	Warnings  []string         `json:"warnings,omitempty"`
 	Planned   int              `json:"planned"`
 	Succeeded int              `json:"succeeded"`
 	Failed    int              `json:"failed"`
@@ -399,6 +400,8 @@ type BulkResult struct {
 
 // BulkRowOutcome is the result for one item.
 type BulkRowOutcome struct {
+	Row        int                      `json:"row,omitempty"`
+	Name       string                   `json:"name,omitempty"`
 	ItemID     string                   `json:"item_id"`
 	Status     string                   `json:"status"`
 	Error      string                   `json:"error,omitempty"`

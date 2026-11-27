@@ -18,7 +18,8 @@ write policy below to narrow what an MCP client can change.
 | `people.read` | users and teams | `users:read`, `teams:read` |
 | `collaboration.read` / `.write` | updates, replies, likes, notifications | `updates:read` / `updates:write`, `notifications:write` |
 | `tags.read` / `.write` | tags | `tags:read` / `boards:write` |
-| `reports.read` | every report | `boards:read` |
+| `reports.read` | every report and flow metric | `boards:read` |
+| `automation.read` / `.write` | native automation visibility/control and deterministic workflow orchestration | `boards:read` / `boards:write`; provider workflow APIs may require current platform access |
 
 ## Access levels
 
@@ -32,9 +33,9 @@ error so an old deployment cannot silently select a different policy.
 
 | Level | Tools | Use it for |
 |---|---|---|
-| `read` | 58 read tools: schema, search, reports, discovery, diagnostics | Analysts, dashboards, audits |
-| `write` (default) | + 40 write/archive tools: create, update, move, archive, bulk | Day-to-day work; archived objects can be restored from monday at any time |
-| `full` | + 7 permanent deletes (`delete_*`) | Cleanup and maintenance by a trusted operator |
+| `read` | 64 read tools: schema, search, reports, discovery, diagnostics | Analysts, dashboards, audits |
+| `write` (default) | + 47 write/archive tools: create, update, move, archive, bulk | Day-to-day work; archived objects can be restored from monday at any time |
+| `full` | + 8 permanent deletes (`delete_*`) | Cleanup and maintenance by a trusted operator |
 
 ### Tool profiles
 
@@ -47,9 +48,9 @@ complete access-level catalog.
 |---|---|---|
 | `full` | Every write allowed by `MCP_ACCESS_LEVEL`; permanent deletes still require `full` | Trusted operator/automation |
 | `read_only` | None | Analysts, audits, reporting |
-| `developer` | Item, bulk, collaboration, and tag writes | Day-to-day execution on existing boards |
-| `project_manager` | Board/group/column structure, item, bulk, collaboration, and tag writes; no workspace administration | Planning, templates, coordination, reports |
-| `devops` | Workspace, board, group, column, item, bulk, collaboration, and tag writes; no permanent deletes | Provisioning and operational administration |
+| `developer` | Item, bulk, collaboration, tag, and workflow writes | Day-to-day execution on existing boards |
+| `project_manager` | Board/group/column structure, item, bulk, collaboration, tag, and workflow writes; no workspace administration | Planning, templates, coordination, reports |
+| `devops` | Workspace, board, group, column, item, bulk, collaboration, tag, and workflow writes; no permanent deletes | Provisioning and operational administration |
 
 Read tools remain visible in every non-`read_only` profile so the client can
 inspect schema and confirm context before writing. A write hidden by the
@@ -70,6 +71,15 @@ construction — arguments, results, tokens, user content, and raw error message
 are never stored. The registry is bounded by the registered tool catalog. The
 counters reset when the container restarts and are operational diagnostics, not
 a billing or audit log.
+
+### Automations, workflows, and statistics
+
+Monday exposes two complementary control planes:
+
+1. **Native provider automations.** `list_automations` reads board automation configuration through monday's versioned automation API. `create_automation` exposes monday's preview creation mutation for template-based or expert-authored workflow JSON; it is dry-run-first, bounds definition size, rejects mixed creation modes, and refuses common embedded credential values. `manage_automation` can activate or deactivate a live workflow after proving that the automation belongs to the requested board. Permanent removal is isolated in `delete_automation`, which exists only with `MCP_ACCESS_LEVEL=full`, requires `confirm: true`, and performs the same ownership proof. Legacy automations can be provider read-only, and complex visual editing remains product-controlled because monday does not expose a stable general automation-editing mutation. `get_automation_statistics` and `list_automation_runs` expose success, failure, exhaustion, and execution-history signals when the account has the current workflow platform.
+2. **Deterministic MCP workflows.** `run_board_automation`, `complete_item`, and `handoff_item` orchestrate validated item transitions through the normal MCP write boundary. They are server-side workflows rather than stored monday recipes: they are dry-run by default, evaluate bounded item sets, validate every column value before writing, enforce workspace scope and write allowlists, execute with bounded concurrency, and report row-level outcomes.
+
+`board_flow_metrics` adds execution statistics: WIP by status and group, bottleneck status, completion, workload, overdue/stale counts, created/updated throughput, and aging/cycle-time approximations. Completion proxies are explicitly labelled because monday item history is not a complete immutable status-transition event stream.
 
 ### Model-facing instructions and write-tool allowlist
 

@@ -39,11 +39,12 @@ const (
 	CatCollab      = "collaboration"
 	CatTags        = "tags"
 	CatReports     = "reports"
+	CatAutomation  = "automation"
 	CatDeletes     = "deletes"
 )
 
 // CategoryOrder is the documented order of categories.
-var CategoryOrder = []string{CatDiagnostics, CatWorkspaces, CatBoards, CatGroups, CatColumns, CatItemsRead, CatItemsWrite, CatBulk, CatPeople, CatCollab, CatTags, CatReports, CatDeletes}
+var CategoryOrder = []string{CatDiagnostics, CatWorkspaces, CatBoards, CatGroups, CatColumns, CatItemsRead, CatItemsWrite, CatBulk, CatPeople, CatCollab, CatTags, CatReports, CatAutomation, CatDeletes}
 
 type registry struct {
 	server             *mcp.Server
@@ -135,15 +136,15 @@ func toolProfileAllows(profile string, spec ToolSpec) bool {
 	}
 	writeCaps := map[string]map[string]bool{
 		config.ToolProfileDeveloper: {
-			"items.write": true, "collaboration.write": true, "tags.write": true,
+			"items.write": true, "collaboration.write": true, "tags.write": true, "automation.write": true,
 		},
 		config.ToolProfileProjectManager: {
 			"boards.write": true, "groups.write": true, "columns.write": true, "items.write": true,
-			"collaboration.write": true, "tags.write": true,
+			"collaboration.write": true, "tags.write": true, "automation.write": true,
 		},
 		config.ToolProfileDevOps: {
 			"workspaces.write": true, "boards.write": true, "groups.write": true, "columns.write": true,
-			"items.write": true, "collaboration.write": true, "tags.write": true,
+			"items.write": true, "collaboration.write": true, "tags.write": true, "automation.write": true,
 		},
 	}
 	allowed, ok := writeCaps[profile]

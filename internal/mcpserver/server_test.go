@@ -21,9 +21,9 @@ import (
 )
 
 // expectedToolCount is the write-level catalog; full adds the delete tools.
-const expectedToolCount = 98
+const expectedToolCount = 111
 
-const expectedDeleteTools = 7
+const expectedDeleteTools = 8
 
 func connect(t *testing.T, readOnly bool) (*mcp.ClientSession, []mcpserver.ToolSpec, *applicationtest.FakePort) {
 	t.Helper()
@@ -283,7 +283,7 @@ func TestToolCallsReachServiceAndReturnStructuredContent(t *testing.T) {
 		t.Fatalf("summary = %v", summary)
 	}
 	_, catalog := call(t, session, "list_tool_catalog", map[string]any{"category": "reports"})
-	if catalog["count"].(float64) != 17 {
+	if catalog["count"].(float64) != 18 {
 		t.Fatalf("reports catalog = %v", catalog["count"])
 	}
 }
@@ -306,7 +306,7 @@ func TestToolErrorsAreReportedAsToolResults(t *testing.T) {
 func TestPromptsAreRegistered(t *testing.T) {
 	session, _, _ := connect(t, true)
 	prompts, err := session.ListPrompts(context.Background(), nil)
-	if err != nil || len(prompts.Prompts) != 2 {
+	if err != nil || len(prompts.Prompts) != 4 {
 		t.Fatalf("prompts = %+v err = %v", prompts, err)
 	}
 	got, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: "board_health_review", Arguments: map[string]string{"board_id": "100"}})
@@ -486,7 +486,7 @@ func TestStableToolSchemas(t *testing.T) {
 	}
 	sum := sha256.Sum256(raw)
 	got := hex.EncodeToString(sum[:])
-	const expected = "0cdf46ea05f05d04ee7903aa96f717d38e514835fe387b9135fe1c0c0464ff41"
+	const expected = "5b9e6b41929ae4792ff1f411b2ce696492961f577678193b3a4cde4f482a2037"
 	if got != expected {
 		t.Fatalf("stable tool schema digest changed: got %s; update intentionally with release notes", got)
 	}
